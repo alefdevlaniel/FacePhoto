@@ -1,0 +1,77 @@
+/* ── BRAND DESIGN TOKENS (FacePhoto Official Palette) ────── */
+:root, [data-theme="dark"] {
+  --bg-primary:    #0A111E; /* Midnight Navy */
+  --bg-surface:    #111C2E; /* Surface Navy */
+  --bg-elevated:   #18263E; /* Card Navy */
+  --bg-hover:      #213350; /* Hover Navy */
+  
+  --accent:        #00B4D8; /* Cyan da rede de IA da Logo */
+  --accent-light:  #38BDF8; /* Sky Cyan Bright */
+  --accent-dark:   #0077B6; /* Deep Cyan/Blue */
+  --accent-glow:   rgba(0, 180, 216, 0.35);
+  
+  --brand-navy:    #0B2545;
+  --brand-cyan:    #00C4CC;
+  
+  --success:       #34D399;
+  --success-dim:   rgba(52, 211, 153, 0.15);
+  --warning:       #FBBF24;
+  --warning-dim:   rgba(251, 191, 36, 0.15);
+  --error:         #F87171;
+  --error-dim:     rgba(248, 113, 113, 0.15);
+  
+  --text-primary:  #F0F6FC;
+  --text-secondary:#94A3B8;
+  --text-muted:    #64748B;
+  --border:        #1E293B;
+  --border-light:  #334155;
+
+  --banner-bg:     #11141A;
+  --card-bg-mock:  rgba(255,255,255,0.03);
+  --modal-overlay: rgba(8, 14, 26, 0.88);
+  --shadow-md:     0 8px 24px rgba(0,0,0,.6);
+}
+
+[data-theme="light"] {
+  --bg-primary:    #F8FAFC; /* Slate Light */
+  --bg-surface:    #FFFFFF; /* Pure White Surface */
+  --bg-elevated:   #F1F5F9; /* Light Slate Card */
+  --bg-hover:      #E2E8F0; /* Soft Hover */
+  
+  --accent:        #0096C7; /* Brand Cyan Blue */
+  --accent-light:  #0284C7; /* Sky Blue */
+  --accent-dark:   #0369A1; /* Deep Blue */
+  --accent-glow:   rgba(0, 150, 199, 0.25);
+  
+  --brand-navy:    #0B2545;
+  --brand-cyan:    #0096C7;
+  
+  --success:       #10B981;
+  --success-dim:   rgba(16, 185, 129, 0.12);
+  --warning:       #D97706;
+  --warning-dim:   rgba(217, 119, 6, 0.12);
+  --error:         #EF4444;
+  --error-dim:     rgba(239, 68, 68, 0.12);
+  
+  --text-primary:  #0B2545; /* Navy Text */
+  --text-secondary:#475569;
+  --text-muted:    #94A3B8;
+  --border:        #E2E8F0;
+  --border-light:  #CBD5E1;
+
+  --banner-bg:     #FFFFFF;
+  --card-bg-mock:  #F8FAFC;
+  --modal-overlay: rgba(11, 37, 69, 0.4);
+  --shadow-md:     0 8px 24px rgba(11, 37, 69, 0.12);
+}
+
+/* Base reset & typography */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  height: 100%; background: var(--bg-primary);
+  color: var(--text-primary); font-family: 'Inter', sans-serif;
+  font-size: 14px; line-height: 1.6; overflow: hidden;
+  transition: background-color .3s ease, color .3s ease;
+}
+button { cursor: pointer; font-family: inherit; border: none; outline: none; }
+input  { font-family: inherit; outline: none; }

@@ -1,0 +1,1625 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FacePhoto — Protótipo de Interface</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ── BRAND DESIGN TOKENS (Dark & Light extraídos das Logos Oficials) ── */
+    :root, [data-theme="dark"] {
+      --bg-primary:    #0A111E; /* Midnight Navy */
+      --bg-surface:    #111C2E; /* Surface Navy */
+      --bg-elevated:   #18263E; /* Card Navy */
+      --bg-hover:      #213350; /* Hover Navy */
+      
+      --accent:        #00B4D8; /* Cyan da rede de IA da Logo */
+      --accent-light:  #38BDF8; /* Sky Cyan Bright */
+      --accent-dark:   #0077B6; /* Deep Cyan/Blue */
+      --accent-glow:   rgba(0, 180, 216, 0.35);
+      
+      --brand-navy:    #0B2545;
+      --brand-cyan:    #00C4CC;
+      
+      --success:       #34D399;
+      --success-dim:   rgba(52, 211, 153, 0.15);
+      --warning:       #FBBF24;
+      --warning-dim:   rgba(251, 191, 36, 0.15);
+      --error:         #F87171;
+      --error-dim:     rgba(248, 113, 113, 0.15);
+      
+      --text-primary:  #F0F6FC;
+      --text-secondary:#94A3B8;
+      --text-muted:    #64748B;
+      --border:        #1E293B;
+      --border-light:  #334155;
+
+      --banner-bg:     #11141A;
+      --card-bg-mock:  rgba(255,255,255,0.03);
+      --modal-overlay: rgba(8, 14, 26, 0.88);
+      --shadow-md:     0 8px 24px rgba(0,0,0,.6);
+    }
+
+    [data-theme="light"] {
+      --bg-primary:    #F8FAFC; /* Slate Light */
+      --bg-surface:    #FFFFFF; /* Pure White Surface */
+      --bg-elevated:   #F1F5F9; /* Light Slate Card */
+      --bg-hover:      #E2E8F0; /* Soft Hover */
+      
+      --accent:        #0096C7; /* Brand Cyan Blue */
+      --accent-light:  #0284C7; /* Sky Blue */
+      --accent-dark:   #0369A1; /* Deep Blue */
+      --accent-glow:   rgba(0, 150, 199, 0.25);
+      
+      --brand-navy:    #0B2545;
+      --brand-cyan:    #0096C7;
+      
+      --success:       #10B981;
+      --success-dim:   rgba(16, 185, 129, 0.12);
+      --warning:       #D97706;
+      --warning-dim:   rgba(217, 119, 6, 0.12);
+      --error:         #EF4444;
+      --error-dim:     rgba(239, 68, 68, 0.12);
+      
+      --text-primary:  #0B2545; /* Navy Text */
+      --text-secondary:#475569;
+      --text-muted:    #94A3B8;
+      --border:        #E2E8F0;
+      --border-light:  #CBD5E1;
+
+      --banner-bg:     #FFFFFF;
+      --card-bg-mock:  #F8FAFC;
+      --modal-overlay: rgba(11, 37, 69, 0.4);
+      --shadow-md:     0 8px 24px rgba(11, 37, 69, 0.12);
+    }
+
+    /* ── RESET & BASE ──────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%; background: var(--bg-primary);
+      color: var(--text-primary); font-family: 'Inter', sans-serif;
+      font-size: 14px; line-height: 1.6; overflow: hidden;
+      transition: background-color .3s ease, color .3s ease;
+    }
+    button { cursor: pointer; font-family: inherit; border: none; outline: none; }
+    input  { font-family: inherit; outline: none; }
+
+    /* ── APP SHELL ─────────────────────────────────────────── */
+    #app { width: 100vw; height: 100vh; position: relative; overflow: hidden; }
+
+    /* ── SCREENS ───────────────────────────────────────────── */
+    .screen {
+      position: absolute; inset: 0;
+      display: none; flex-direction: column;
+      animation: fadeIn .3s ease;
+    }
+    .screen.active { display: flex; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+    /* ── TOPBAR UNIFORME ──────────────────────────────────── */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px; height: 64px; min-height: 64px;
+      background: var(--bg-surface); border-bottom: 1px solid var(--border);
+      transition: background-color .3s ease, border-color .3s ease;
+      z-index: 10;
+    }
+    .topbar-logo { display: flex; align-items: center; gap: 12px; }
+    .topbar-logo img {
+      width: 36px; height: 36px; border-radius: 8px;
+      object-fit: cover; background: #fff; padding: 2px;
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+    .topbar-logo span { font-weight: 700; font-size: 18px; letter-spacing: -0.3px; }
+    .topbar-logo .version { font-size: 11px; color: var(--text-muted); margin-left: 2px; font-weight: 400; }
+    .topbar-right { display: flex; align-items: center; gap: 14px; }
+
+    /* ── SELETOR DE TEMA DESTACADO E VISÍVEL ──────────────── */
+    .theme-switcher-box {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--bg-elevated); border: 1px solid var(--border-light);
+      border-radius: var(--radius-md); padding: 4px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+    .theme-switcher-label {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .5px; color: var(--text-muted); padding: 0 6px;
+    }
+    .theme-option {
+      padding: 6px 14px; border-radius: 8px; background: transparent;
+      color: var(--text-secondary); font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: var(--transition);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .theme-option:hover { color: var(--text-primary); }
+    .theme-option.active {
+      background: var(--accent); color: #FFFFFF;
+      box-shadow: 0 2px 10px var(--accent-glow);
+    }
+
+    /* ── BREADCRUMB ────────────────────────────────────────── */
+    .breadcrumb {
+      display: flex; align-items: center; gap: 8px;
+      padding: 0 24px; height: 40px; min-height: 40px;
+      background: var(--bg-primary); border-bottom: 1px solid var(--border);
+      font-size: 12px; color: var(--text-secondary);
+      transition: background-color .3s ease, border-color .3s ease;
+    }
+    .breadcrumb-item { display: flex; align-items: center; gap: 6px; }
+    .breadcrumb-item.active { color: var(--text-primary); font-weight: 500; }
+    .breadcrumb-sep { color: var(--text-muted); }
+
+    /* ── CONTENT AREA ──────────────────────────────────────── */
+    .content {
+      flex: 1; overflow-y: auto; padding: 28px 32px;
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    }
+    .content::-webkit-scrollbar { width: 6px; }
+    .content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── BUTTONS ───────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 8px; padding: 10px 20px; border-radius: var(--radius-sm);
+      font-size: 14px; font-weight: 600; transition: var(--transition);
+      white-space: nowrap;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+      color: #fff;
+      box-shadow: 0 4px 14px var(--accent-glow);
+    }
+    .btn-primary:hover {
+      background: linear-gradient(135deg, var(--accent-light) 0%, var(--accent) 100%);
+      box-shadow: 0 6px 20px rgba(0, 180, 216, 0.45);
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: var(--bg-elevated); color: var(--text-primary);
+      border: 1px solid var(--border-light);
+    }
+    .btn-secondary:hover { background: var(--bg-hover); border-color: var(--accent); }
+    .btn-ghost { background: transparent; color: var(--text-secondary); }
+    .btn-ghost:hover { background: var(--bg-elevated); color: var(--text-primary); }
+    .btn-danger { background: var(--error-dim); color: var(--error); border: 1px solid rgba(248,113,113,.3); }
+    .btn-danger:hover { background: rgba(248,113,113,.25); }
+    .btn-success { background: var(--success-dim); color: var(--success); border: 1px solid rgba(52,211,153,.3); }
+    .btn-success:hover { background: rgba(52,211,153,.25); }
+    .btn-lg { padding: 14px 28px; font-size: 15px; }
+    .btn-sm { padding: 6px 14px; font-size: 12px; }
+
+    /* ── CARDS & BADGES ────────────────────────────────────── */
+    .card {
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 20px;
+      transition: background-color .3s ease, border-color .3s ease;
+    }
+    .card-title { font-size: 13px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 16px; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600;
+    }
+    .badge-success { background: var(--success-dim); color: var(--success); }
+    .badge-warning { background: var(--warning-dim); color: var(--warning); }
+    .badge-accent  { background: var(--accent-glow); color: var(--accent); }
+    .badge-muted   { background: var(--bg-elevated); color: var(--text-secondary); }
+
+    /* ────────────────────────────────────────────────────────
+       T01 — BOAS-VINDAS
+    ──────────────────────────────────────────────────────── */
+    #screen-welcome {
+      background: var(--bg-primary);
+      overflow-y: auto;
+    }
+    .welcome-content-wrap {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 32px 24px;
+    }
+    .welcome-wrap {
+      display: flex; flex-direction: column; align-items: center;
+      text-align: center; max-width: 680px; width: 100%;
+    }
+    .welcome-banner-container {
+      width: 100%; max-width: 620px; border-radius: var(--radius-lg);
+      overflow: hidden; background: var(--banner-bg);
+      border: 1px solid var(--border-light);
+      box-shadow: var(--shadow-md);
+      margin-bottom: 28px; transition: var(--transition);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .welcome-banner-container:hover {
+      box-shadow: 0 16px 50px var(--accent-glow), 0 0 0 1px var(--accent);
+      transform: translateY(-2px);
+    }
+    .welcome-banner-img {
+      width: 100%; height: auto; display: block;
+      transition: opacity .3s ease;
+    }
+    .welcome-title { font-size: 34px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 8px; }
+    .welcome-title span { background: linear-gradient(135deg, var(--accent-light), var(--brand-cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .welcome-sub { color: var(--text-secondary); font-size: 15px; margin-bottom: 32px; line-height: 1.6; }
+    .welcome-steps {
+      display: flex; flex-direction: column; gap: 12px;
+      width: 100%; margin-bottom: 32px;
+    }
+    .welcome-step {
+      display: flex; align-items: center; gap: 16px;
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 14px 18px; text-align: left;
+    }
+    .step-num {
+      width: 34px; height: 34px; border-radius: 50%; min-width: 34px;
+      background: var(--accent-glow); border: 1px solid var(--accent);
+      color: var(--accent); font-weight: 700; font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .step-text strong { display: block; font-size: 14px; margin-bottom: 2px; }
+    .step-text span { font-size: 12px; color: var(--text-secondary); }
+    .welcome-note { font-size: 12px; color: var(--text-muted); margin-top: 16px; }
+
+    /* ────────────────────────────────────────────────────────
+       T02 — HOME / HISTÓRICO
+    ──────────────────────────────────────────────────────── */
+    .home-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      margin-bottom: 28px;
+    }
+    .home-header h1 { font-size: 22px; font-weight: 700; }
+    .home-header p  { color: var(--text-secondary); font-size: 13px; margin-top: 4px; }
+    .history-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .8px; color: var(--text-muted); margin-bottom: 12px;
+    }
+    .history-grid { display: flex; flex-direction: column; gap: 10px; }
+    .history-card {
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 16px 20px;
+      display: flex; align-items: center; gap: 16px;
+      cursor: pointer; transition: var(--transition);
+    }
+    .history-card:hover { border-color: var(--accent); background: var(--bg-elevated); box-shadow: var(--shadow-md); }
+    .history-avatar {
+      width: 44px; height: 44px; border-radius: 50%; min-width: 44px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; font-weight: 700; color: #fff;
+    }
+    .history-info { flex: 1; }
+    .history-info h3 { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+    .history-info p  { font-size: 12px; color: var(--text-secondary); }
+    .history-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+    .history-stats { text-align: right; }
+    .history-stats .stat-big { font-size: 22px; font-weight: 700; color: var(--accent); }
+    .history-stats .stat-label { font-size: 11px; color: var(--text-secondary); }
+
+    /* ────────────────────────────────────────────────────────
+       T03 — CONFIGURAR BUSCA
+    ──────────────────────────────────────────────────────── */
+    .config-layout { display: grid; grid-template-columns: 1fr 340px; gap: 24px; align-items: start; }
+    .section-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .8px; color: var(--accent); margin-bottom: 10px;
+    }
+    .section-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+    .section-sub { font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; }
+
+    .person-block {
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 20px; margin-bottom: 12px;
+    }
+    .person-name-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .person-name-input {
+      flex: 1; background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 9px 14px;
+      color: var(--text-primary); font-size: 14px; transition: var(--transition);
+    }
+    .person-name-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .ref-photos { display: flex; gap: 10px; flex-wrap: wrap; }
+    .ref-photo {
+      width: 72px; height: 72px; border-radius: var(--radius-sm);
+      overflow: hidden; position: relative; border: 1px solid var(--border);
+    }
+    .ref-photo .remove-btn {
+      position: absolute; top: 3px; right: 3px; width: 18px; height: 18px;
+      background: rgba(10,17,30,.85); border-radius: 50%; border: none;
+      color: var(--text-secondary); font-size: 10px; display: flex;
+      align-items: center; justify-content: center; cursor: pointer;
+      transition: var(--transition);
+    }
+    .ref-photo .remove-btn:hover { background: var(--error); color: #fff; }
+    .ref-photo-face {
+      width: 100%; height: 100%; display: flex; align-items: center;
+      justify-content: center; font-size: 28px; font-weight: 700; color: #fff;
+    }
+    .add-photo-btn {
+      width: 72px; height: 72px; border-radius: var(--radius-sm);
+      border: 2px dashed var(--border); background: var(--bg-elevated);
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; cursor: pointer; gap: 4px;
+      color: var(--text-muted); font-size: 10px; transition: var(--transition);
+    }
+    .add-photo-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+    .add-photo-btn .icon { font-size: 20px; }
+
+    .folder-picker {
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 14px 16px;
+      display: flex; align-items: center; gap: 12px; margin-bottom: 10px;
+    }
+    .folder-icon { font-size: 22px; }
+    .folder-path { flex: 1; }
+    .folder-path .path-text { font-size: 13px; font-family: 'JetBrains Mono', monospace; color: var(--text-primary); }
+    .folder-path .path-sub  { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+
+    .threshold-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .threshold-value {
+      font-size: 18px; font-weight: 700; color: var(--accent);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    input[type=range] {
+      width: 100%; accent-color: var(--accent); height: 4px;
+      border-radius: 2px; cursor: pointer;
+    }
+    .threshold-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+
+    .config-sidebar { display: flex; flex-direction: column; gap: 16px; }
+    .info-box {
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 16px;
+    }
+    .info-box h4 { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+    .info-box p { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
+    .info-item { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+
+    .config-footer {
+      padding: 16px 32px; background: var(--bg-surface);
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    /* ────────────────────────────────────────────────────────
+       T04 — PROCESSAMENTO
+    ──────────────────────────────────────────────────────── */
+    #screen-processing { background: var(--bg-primary); }
+    .processing-body {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 32px; gap: 24px;
+    }
+    .processing-title { font-size: 22px; font-weight: 700; text-align: center; }
+    .processing-sub { color: var(--text-secondary); font-size: 14px; text-align: center; }
+
+    .progress-card {
+      width: 100%; max-width: 680px;
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: var(--radius-xl); padding: 28px; display: flex; flex-direction: column; gap: 20px;
+    }
+
+    .gpu-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--success-dim); border: 1px solid rgba(52,211,153,.3);
+      border-radius: var(--radius-sm); padding: 6px 12px;
+      font-size: 12px; font-weight: 600; color: var(--success);
+    }
+    .gpu-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--success);
+      animation: blink 1.2s ease infinite;
+    }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+    .progress-wrap { display: flex; flex-direction: column; gap: 8px; }
+    .progress-header { display: flex; justify-content: space-between; align-items: center; }
+    .progress-label { font-size: 13px; font-weight: 600; }
+    .progress-pct { font-size: 24px; font-weight: 800; color: var(--accent); font-family: 'JetBrains Mono', monospace; }
+    .progress-bar-track {
+      width: 100%; height: 8px; background: var(--bg-elevated);
+      border-radius: 4px; overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%; border-radius: 4px; width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--brand-cyan));
+      transition: width .3s ease;
+      box-shadow: 0 0 14px var(--accent-glow);
+    }
+    .progress-counts { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); }
+
+    .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .stat-box {
+      background: var(--bg-elevated); border-radius: var(--radius-md);
+      padding: 14px; text-align: center;
+    }
+    .stat-box .stat-number { font-size: 22px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .stat-box .stat-desc { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+    .stat-box.found .stat-number { color: var(--success); }
+    .stat-box.review .stat-number { color: var(--warning); }
+    .stat-box.skip .stat-number  { color: var(--text-muted); }
+
+    .time-row {
+      display: flex; justify-content: space-between; align-items: center;
+      background: var(--bg-elevated); border-radius: var(--radius-md); padding: 12px 16px;
+    }
+    .time-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .time-item .t-label { font-size: 11px; color: var(--text-secondary); }
+    .time-item .t-value { font-size: 15px; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+
+    .log-box {
+      background: var(--bg-primary); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 14px; height: 130px;
+      overflow-y: auto; display: flex; flex-direction: column; gap: 2px;
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    }
+    .log-entry { font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); display: flex; gap: 10px; }
+    .log-entry.found   { color: var(--success); }
+    .log-entry.warning { color: var(--warning); }
+    .log-entry .log-time { color: var(--text-muted); min-width: 60px; }
+    .log-entry .log-msg { flex: 1; }
+
+    .proc-controls { display: flex; gap: 12px; justify-content: center; }
+
+    /* ────────────────────────────────────────────────────────
+       T05 — RESULTADOS
+    ──────────────────────────────────────────────────────── */
+    .results-header { margin-bottom: 20px; }
+    .results-header h1 { font-size: 22px; font-weight: 700; }
+    .results-header p  { color: var(--text-secondary); font-size: 13px; margin-top: 4px; }
+
+    .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+    .tab-btn {
+      padding: 10px 20px; background: transparent; color: var(--text-secondary);
+      border: none; border-bottom: 2px solid transparent; cursor: pointer;
+      font-size: 14px; font-weight: 500; transition: var(--transition);
+      margin-bottom: -1px;
+    }
+    .tab-btn:hover { color: var(--text-primary); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-count {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 20px; height: 20px; padding: 0 6px;
+      border-radius: 10px; font-size: 11px; font-weight: 700;
+      background: var(--bg-elevated); margin-left: 6px;
+    }
+    .tab-btn.active .tab-count { background: var(--accent-glow); color: var(--accent); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .results-toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .toolbar-left { display: flex; align-items: center; gap: 10px; }
+    .select-all-btn {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 6px 12px; color: var(--text-secondary);
+      font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);
+    }
+    .select-all-btn:hover { color: var(--text-primary); border-color: var(--border-light); }
+    .selection-count { font-size: 13px; color: var(--text-secondary); }
+    .selection-count span { color: var(--accent); font-weight: 600; }
+
+    .photo-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px;
+    }
+    .photo-thumb {
+      position: relative; border-radius: var(--radius-md); overflow: hidden;
+      background: var(--bg-elevated); cursor: pointer;
+      border: 2px solid transparent; transition: var(--transition);
+      aspect-ratio: 1;
+    }
+    .photo-thumb:hover { transform: scale(1.02); border-color: var(--border-light); }
+    .photo-thumb.selected { border-color: var(--accent); }
+    .photo-thumb.selected::after {
+      content: ''; position: absolute; inset: 0;
+      background: rgba(0, 180, 216, 0.12); pointer-events: none;
+    }
+    .photo-thumb.review-item { border-color: rgba(251,191,36,.3); }
+    .photo-thumb.review-item:hover { border-color: var(--warning); }
+    .photo-face-mock {
+      width: 100%; height: 100%; display: flex; align-items: center;
+      justify-content: center; font-size: 40px; position: relative;
+    }
+    .photo-face-box {
+      position: absolute; border: 2px solid var(--accent); border-radius: 4px;
+      top: 30%; left: 30%; width: 40%; height: 40%;
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+    .photo-face-box.review { border-color: var(--warning); box-shadow: 0 0 8px rgba(251,191,36,.4); }
+    .photo-thumb-footer {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: linear-gradient(transparent, var(--bg-primary));
+      padding: 20px 8px 8px; display: flex; justify-content: space-between; align-items: flex-end;
+    }
+    .photo-score {
+      font-size: 12px; font-weight: 700; font-family: 'JetBrains Mono', monospace;
+    }
+    .score-high   { color: var(--accent-light); }
+    .score-mid    { color: var(--brand-cyan); }
+    .score-low    { color: var(--warning); }
+    .photo-checkbox {
+      width: 20px; height: 20px; border-radius: 4px;
+      border: 2px solid var(--border); background: var(--bg-surface);
+      display: flex; align-items: center; justify-content: center;
+      transition: var(--transition);
+    }
+    .photo-thumb.selected .photo-checkbox { background: var(--accent); border-color: var(--accent); }
+    .photo-thumb.selected .photo-checkbox::after { content: '✓'; color: #fff; font-size: 12px; font-weight: 700; }
+
+    .review-actions {
+      display: flex; gap: 6px; padding: 6px; position: absolute; top: 0; right: 0;
+    }
+    .review-btn {
+      width: 28px; height: 28px; border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; border: none; cursor: pointer; transition: var(--transition);
+    }
+    .review-btn.accept { background: var(--success-dim); color: var(--success); }
+    .review-btn.accept:hover { background: var(--success); color: #fff; }
+    .review-btn.reject { background: var(--error-dim); color: var(--error); }
+    .review-btn.reject:hover { background: var(--error); color: #fff; }
+
+    .results-footer {
+      padding: 16px 32px; background: var(--bg-surface);
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    /* ────────────────────────────────────────────────────────
+       T05b — VISUALIZADOR
+    ──────────────────────────────────────────────────────── */
+    #screen-viewer {
+      background: var(--modal-overlay);
+      backdrop-filter: blur(12px);
+    }
+    .viewer-topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 24px; background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .viewer-nav { display: flex; align-items: center; gap: 8px; }
+    .viewer-body {
+      flex: 1; display: grid; grid-template-columns: 1fr 300px;
+    }
+    .viewer-main {
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px; background: var(--bg-primary); position: relative;
+    }
+    .viewer-photo-mock {
+      width: 100%; max-width: 500px; max-height: 440px;
+      border-radius: var(--radius-lg); overflow: hidden;
+      border: 1px solid var(--border); position: relative;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg-elevated); aspect-ratio: 4/3;
+    }
+    .viewer-face-icon { font-size: 100px; opacity: .3; }
+    .viewer-face-rect {
+      position: absolute; border: 3px solid var(--accent); border-radius: 8px;
+      top: 25%; left: 35%; width: 32%; height: 42%;
+      box-shadow: 0 0 24px var(--accent-glow), inset 0 0 20px rgba(0,180,216,.08);
+      animation: face-pulse 2s ease infinite;
+    }
+    @keyframes face-pulse {
+      0%,100% { box-shadow: 0 0 24px var(--accent-glow), inset 0 0 20px rgba(0,180,216,.08); }
+      50%      { box-shadow: 0 0 36px rgba(0,180,216,.6), inset 0 0 26px rgba(0,180,216,.15); }
+    }
+    .viewer-face-label {
+      position: absolute; top: 23%; left: 35%;
+      background: var(--accent); color: #fff; font-size: 10px; font-weight: 700;
+      padding: 2px 8px; border-radius: 4px 4px 0 0; transform: translateY(-100%);
+    }
+    .viewer-sidebar {
+      background: var(--bg-surface); border-left: 1px solid var(--border);
+      padding: 20px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto;
+    }
+    .meta-group { display: flex; flex-direction: column; gap: 8px; }
+    .meta-item { display: flex; flex-direction: column; gap: 2px; }
+    .meta-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; }
+    .meta-value { font-size: 13px; font-family: 'JetBrains Mono', monospace; color: var(--text-primary); word-break: break-all; }
+    .confidence-bar-wrap { display: flex; flex-direction: column; gap: 6px; }
+    .conf-header { display: flex; justify-content: space-between; }
+    .conf-pct { font-size: 22px; font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', monospace; }
+    .conf-bar-track { height: 6px; background: var(--bg-elevated); border-radius: 3px; overflow: hidden; }
+    .conf-bar-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--brand-cyan)); width: 89%; }
+    .viewer-actions { display: flex; gap: 8px; margin-top: 8px; }
+
+    /* ────────────────────────────────────────────────────────
+       T06 — RELATÓRIO FINAL
+    ──────────────────────────────────────────────────────── */
+    #screen-report {
+      align-items: center; justify-content: center;
+      background: var(--bg-primary);
+    }
+    .report-wrap {
+      width: 100%; max-width: 600px; display: flex;
+      flex-direction: column; gap: 24px; padding: 32px;
+    }
+    .report-success-icon {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: var(--accent-glow); border: 2px solid var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 32px; margin: 0 auto; color: var(--accent);
+      box-shadow: 0 0 30px var(--accent-glow);
+    }
+    .report-title { text-align: center; font-size: 26px; font-weight: 800; }
+    .report-subtitle { text-align: center; font-size: 14px; color: var(--text-secondary); }
+    .report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .report-stat {
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 16px; text-align: center;
+    }
+    .report-stat .r-number { font-size: 28px; font-weight: 800; font-family: 'JetBrains Mono', monospace; margin-bottom: 4px; }
+    .report-stat .r-label  { font-size: 12px; color: var(--text-secondary); }
+    .report-stat.highlight { border-color: var(--accent); background: var(--accent-glow); }
+    .report-stat.highlight .r-number { color: var(--accent); }
+    .report-path {
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 14px 16px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .report-path .path-text { font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); flex: 1; word-break: break-all; }
+    .report-actions { display: flex; flex-direction: column; gap: 10px; }
+    .report-actions-row { display: flex; gap: 10px; }
+
+    /* ── UTILS ─────────────────────────────────────────────── */
+    .gap-8  { gap: 8px; }
+    .gap-12 { gap: 12px; }
+    .mt-8   { margin-top: 8px; }
+    .mt-16  { margin-top: 16px; }
+    .separator { height: 1px; background: var(--border); margin: 4px 0; }
+
+    .proto-banner {
+      position: fixed; bottom: 16px; right: 16px; z-index: 999;
+      background: var(--bg-surface); border: 1px solid var(--border-light);
+      border-radius: var(--radius-md); padding: 8px 14px;
+      font-size: 11px; color: var(--text-secondary);
+      display: flex; align-items: center; gap: 8px;
+      box-shadow: var(--shadow-md);
+    }
+    .proto-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: blink 1.5s ease infinite; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ══════════════════════════════════════════════════════
+       T01 — BOAS-VINDAS
+  ══════════════════════════════════════════════════════ -->
+  <div id="screen-welcome" class="screen active">
+    <!-- Topbar presente na tela inicial -->
+    <div class="topbar">
+      <div class="topbar-logo" onclick="goTo('screen-home')" style="cursor:pointer">
+        <img src="assets/logo_icon.jpg" alt="Logo Icon" />
+        <span>FacePhoto</span>
+        <span class="version">v1.0</span>
+      </div>
+      <div class="topbar-right">
+        <div class="theme-switcher-box">
+          <span class="theme-switcher-label">Tema:</span>
+          <button class="theme-option active" id="btn-theme-dark-welcome" onclick="setTheme('dark')">🌙 Escuro</button>
+          <button class="theme-option" id="btn-theme-light-welcome" onclick="setTheme('light')">☀️ Claro</button>
+          <button class="theme-option" id="btn-theme-system-welcome" onclick="setTheme('system')">💻 Auto</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="welcome-content-wrap">
+      <div class="welcome-wrap">
+        <!-- Container da Capa (Troca dinamicamente entre Dark/Light) -->
+        <div class="welcome-banner-container">
+          <img id="welcome-banner-img" class="welcome-banner-img" src="assets/logo_banner_dark.png" alt="FacePhoto Cover Banner" />
+        </div>
+        
+        <div class="welcome-title">Face<span>Photo</span></div>
+        <p class="welcome-sub">
+          Encontre qualquer pessoa em suas fotos de forma<br/>simples, rápida e completamente privada.
+        </p>
+        
+        <div class="welcome-steps">
+          <div class="welcome-step">
+            <div class="step-num">1</div>
+            <div class="step-text">
+              <strong>Adicione fotos de referência</strong>
+              <span>Fotos da pessoa que você quer encontrar — quantas quiser</span>
+            </div>
+          </div>
+          <div class="welcome-step">
+            <div class="step-num">2</div>
+            <div class="step-text">
+              <strong>Selecione seu acervo de fotos</strong>
+              <span>Pasta local, HD externo, pendrive — qualquer origem</span>
+            </div>
+          </div>
+          <div class="welcome-step">
+            <div class="step-num">3</div>
+            <div class="step-text">
+              <strong>Revise e copie os resultados</strong>
+              <span>Veja o que foi encontrado e decida o que salvar</span>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-lg w-full" onclick="goTo('screen-home')">
+          Começar agora →
+        </button>
+        <p class="welcome-note">100% offline · seus dados nunca saem do seu computador</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       T02 — HOME / HISTÓRICO
+  ══════════════════════════════════════════════════════ -->
+  <div id="screen-home" class="screen">
+    <div class="topbar">
+      <div class="topbar-logo" onclick="goTo('screen-home')" style="cursor:pointer">
+        <img src="assets/logo_icon.jpg" alt="Logo Icon" />
+        <span>FacePhoto</span>
+        <span class="version">v1.0</span>
+      </div>
+      <div class="topbar-right">
+        <div class="theme-switcher-box">
+          <span class="theme-switcher-label">Tema:</span>
+          <button class="theme-option active" id="btn-theme-dark-home" onclick="setTheme('dark')">🌙 Escuro</button>
+          <button class="theme-option" id="btn-theme-light-home" onclick="setTheme('light')">☀️ Claro</button>
+          <button class="theme-option" id="btn-theme-system-home" onclick="setTheme('system')">💻 Auto</button>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="goTo('screen-config')">+ Nova Busca</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="home-header">
+        <div>
+          <h1>Boas-vindas de volta! 👋</h1>
+          <p>Selecione uma busca recente ou inicie uma nova.</p>
+        </div>
+        <button class="btn btn-primary" onclick="goTo('screen-config')">+ Nova Busca</button>
+      </div>
+      <div class="history-label">Buscas Recentes</div>
+      <div class="history-grid">
+        <div class="history-card" onclick="goTo('screen-results')">
+          <div class="history-avatar" style="background: linear-gradient(135deg,#00B4D8,#0B2545)">M</div>
+          <div class="history-info">
+            <h3>Vó Maria</h3>
+            <p>D:\HD_Externo\Fotos Família</p>
+            <div class="history-meta">
+              <span class="badge badge-success">✓ Concluída</span>
+              <span class="badge badge-muted">24/07/2026</span>
+              <span class="badge badge-muted">3min 42s</span>
+            </div>
+          </div>
+          <div class="history-stats">
+            <div class="stat-big">35</div>
+            <div class="stat-label">fotos copiadas</div>
+          </div>
+        </div>
+        <div class="history-card" onclick="goTo('screen-results')">
+          <div class="history-avatar" style="background: linear-gradient(135deg,#00C4CC,#18263E)">J</div>
+          <div class="history-info">
+            <h3>Tio João</h3>
+            <p>D:\HD_Externo\Fotos Família</p>
+            <div class="history-meta">
+              <span class="badge badge-success">✓ Concluída</span>
+              <span class="badge badge-muted">20/07/2026</span>
+              <span class="badge badge-muted">2min 15s</span>
+            </div>
+          </div>
+          <div class="history-stats">
+            <div class="stat-big">22</div>
+            <div class="stat-label">fotos copiadas</div>
+          </div>
+        </div>
+        <div class="history-card">
+          <div class="history-avatar" style="background: linear-gradient(135deg,#34D399,#064E3B)">A</div>
+          <div class="history-info">
+            <h3>Ana Paula</h3>
+            <p>C:\Users\João\Pictures\Casamento 2024</p>
+            <div class="history-meta">
+              <span class="badge badge-warning">⏸ Pausada</span>
+              <span class="badge badge-muted">18/07/2026</span>
+            </div>
+          </div>
+          <div class="history-stats">
+            <div class="stat-big" style="color:var(--warning)">47%</div>
+            <div class="stat-label">concluído</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       T03 — CONFIGURAR BUSCA
+  ══════════════════════════════════════════════════════ -->
+  <div id="screen-config" class="screen">
+    <div class="topbar">
+      <div class="topbar-logo" onclick="goTo('screen-home')" style="cursor:pointer">
+        <img src="assets/logo_icon.jpg" alt="Logo Icon" />
+        <span>FacePhoto</span>
+      </div>
+      <div class="topbar-right">
+        <div class="theme-switcher-box">
+          <span class="theme-switcher-label">Tema:</span>
+          <button class="theme-option active" id="btn-theme-dark-config" onclick="setTheme('dark')">🌙 Escuro</button>
+          <button class="theme-option" id="btn-theme-light-config" onclick="setTheme('light')">☀️ Claro</button>
+          <button class="theme-option" id="btn-theme-system-config" onclick="setTheme('system')">💻 Auto</button>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="goTo('screen-home')">← Voltar</button>
+      </div>
+    </div>
+    <div class="breadcrumb">
+      <div class="breadcrumb-item"><span onclick="goTo('screen-home')" style="cursor:pointer">🏠 Início</span></div>
+      <div class="breadcrumb-sep">›</div>
+      <div class="breadcrumb-item active">Nova Busca</div>
+    </div>
+    <div class="content">
+      <div class="config-layout">
+        <div>
+          <!-- Quem buscar -->
+          <div class="section-label">Passo 1</div>
+          <div class="section-title">Quem você quer encontrar?</div>
+          <div class="section-sub">Adicione o nome e pelo menos uma foto de referência da pessoa.</div>
+
+          <div class="person-block">
+            <div class="person-name-row">
+              <input class="person-name-input" type="text" value="Vó Maria" placeholder="Nome da pessoa..." />
+              <button class="btn btn-ghost btn-sm" style="color:var(--error); min-width:32px">✕</button>
+            </div>
+            <div class="section-label" style="margin-bottom:10px">Fotos de referência</div>
+            <div class="ref-photos">
+              <div class="ref-photo">
+                <div class="ref-photo-face" style="background:linear-gradient(135deg,#00B4D8,#0B2545)">👵</div>
+                <button class="remove-btn">✕</button>
+              </div>
+              <div class="ref-photo">
+                <div class="ref-photo-face" style="background:linear-gradient(135deg,#00C4CC,#18263E)">👩</div>
+                <button class="remove-btn">✕</button>
+              </div>
+              <div class="ref-photo">
+                <div class="ref-photo-face" style="background:linear-gradient(135deg,#0077B6,#0A111E)">🧓</div>
+                <button class="remove-btn">✕</button>
+              </div>
+              <div class="add-photo-btn">
+                <div class="icon">+</div>
+                <div>Adicionar</div>
+              </div>
+            </div>
+          </div>
+
+          <button class="btn btn-secondary btn-sm mt-8">
+            + Adicionar outra pessoa
+          </button>
+
+          <!-- Onde buscar -->
+          <div class="separator" style="margin: 24px 0"></div>
+          <div class="section-label">Passo 2</div>
+          <div class="section-title">Onde estão suas fotos?</div>
+          <div class="section-sub">Selecione a pasta raiz — subpastas são incluídas automaticamente.</div>
+
+          <div class="folder-picker">
+            <div class="folder-icon">📁</div>
+            <div class="folder-path">
+              <div class="path-text">D:\HD_Externo\Fotos Família</div>
+              <div class="path-sub">Inclui todas as subpastas · 847 fotos encontradas</div>
+            </div>
+            <button class="btn btn-secondary btn-sm">Trocar</button>
+          </div>
+
+          <!-- Onde salvar -->
+          <div class="separator" style="margin: 24px 0"></div>
+          <div class="section-label">Passo 3</div>
+          <div class="section-title">Onde salvar as fotos encontradas?</div>
+          <div class="section-sub">As fotos serão <strong>copiadas</strong> — os originais permanecem intactos.</div>
+
+          <div class="folder-picker">
+            <div class="folder-icon">📂</div>
+            <div class="folder-path">
+              <div class="path-text">C:\Users\João\Desktop\Fotos Vó Maria</div>
+              <div class="path-sub">Pasta será criada automaticamente se não existir</div>
+            </div>
+            <button class="btn btn-secondary btn-sm">Trocar</button>
+          </div>
+
+          <!-- Avançado -->
+          <div class="separator" style="margin: 24px 0"></div>
+          <div class="section-label">Configurações Avançadas</div>
+          <div class="card mt-8">
+            <div class="threshold-row">
+              <div>
+                <div style="font-size:14px; font-weight:600">Sensibilidade do reconhecimento</div>
+                <div class="text-sm text-secondary mt-8">Valores menores encontram mais fotos; maiores, só as certas.</div>
+              </div>
+              <div class="threshold-value" id="thresh-display">60%</div>
+            </div>
+            <input type="range" min="30" max="95" value="60" id="threshold-slider"
+              oninput="document.getElementById('thresh-display').textContent = this.value + '%'" />
+            <div class="threshold-labels">
+              <span>🎯 Mais resultados</span>
+              <span>Mais preciso 🎯</span>
+            </div>
+            <div class="separator" style="margin: 16px 0"></div>
+            <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:13px">
+              <input type="checkbox" style="accent-color:var(--accent); width:16px; height:16px" />
+              Criar subpasta separada por pessoa no destino
+            </label>
+          </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="config-sidebar">
+          <div class="info-box">
+            <h4>📊 Resumo da sessão</h4>
+            <div class="info-item">
+              <div style="font-size:16px">👤</div>
+              <div>
+                <div style="font-size:13px; font-weight:500">1 pessoa configurada</div>
+                <div class="text-sm text-secondary">Vó Maria · 3 fotos de referência</div>
+              </div>
+            </div>
+            <div class="separator"></div>
+            <div class="info-item">
+              <div style="font-size:16px">📁</div>
+              <div>
+                <div style="font-size:13px; font-weight:500">847 fotos no acervo</div>
+                <div class="text-sm text-secondary">D:\HD_Externo\Fotos Família</div>
+              </div>
+            </div>
+            <div class="separator"></div>
+            <div class="info-item">
+              <div style="font-size:16px">⚡</div>
+              <div>
+                <div style="font-size:13px; font-weight:500">GPU detectada</div>
+                <div class="text-sm text-secondary" style="color:var(--success)">NVIDIA GeForce RTX 3060</div>
+              </div>
+            </div>
+            <div class="separator"></div>
+            <div class="info-item">
+              <div style="font-size:16px">⏱</div>
+              <div>
+                <div style="font-size:13px; font-weight:500">Tempo estimado</div>
+                <div class="text-sm text-secondary">≈ 4–6 minutos com GPU</div>
+              </div>
+            </div>
+          </div>
+          <div class="info-box">
+            <h4>🔒 Privacidade garantida</h4>
+            <p>Todo o processamento ocorre <strong>100% no seu computador</strong>. Nenhuma foto ou dado pessoal é enviado para servidores externos.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="config-footer">
+      <div style="font-size:12px; color:var(--text-secondary)">
+        <span style="color:var(--success); font-weight:600">✓</span> Tudo pronto para iniciar a análise
+      </div>
+      <div style="display:flex; gap:10px">
+        <button class="btn btn-secondary" onclick="goTo('screen-home')">Cancelar</button>
+        <button class="btn btn-primary btn-lg" onclick="startProcessing()">
+          ▶ Iniciar Análise
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       T04 — PROCESSAMENTO
+  ══════════════════════════════════════════════════════ -->
+  <div id="screen-processing" class="screen">
+    <div class="topbar">
+      <div class="topbar-logo" onclick="goTo('screen-home')" style="cursor:pointer">
+        <img src="assets/logo_icon.jpg" alt="Logo Icon" />
+        <span>FacePhoto</span>
+      </div>
+      <div class="topbar-right">
+        <div class="theme-switcher-box">
+          <span class="theme-switcher-label">Tema:</span>
+          <button class="theme-option active" id="btn-theme-dark-proc" onclick="setTheme('dark')">🌙 Escuro</button>
+          <button class="theme-option" id="btn-theme-light-proc" onclick="setTheme('light')">☀️ Claro</button>
+          <button class="theme-option" id="btn-theme-system-proc" onclick="setTheme('system')">💻 Auto</button>
+        </div>
+      </div>
+    </div>
+    <div class="processing-body">
+      <div>
+        <div class="processing-title" id="proc-title">Analisando suas fotos...</div>
+        <div class="processing-sub" id="proc-sub">Aguarde enquanto identificamos as fotos da <strong>Vó Maria</strong></div>
+      </div>
+
+      <div class="progress-card">
+        <div style="display:flex; align-items:center; justify-content:space-between">
+          <div class="gpu-badge">
+            <div class="gpu-dot"></div>
+            GPU: NVIDIA GeForce RTX 3060
+          </div>
+          <div class="text-sm text-secondary" id="proc-phase">Fase: Reconhecimento Facial</div>
+        </div>
+
+        <div class="progress-wrap">
+          <div class="progress-header">
+            <div class="progress-label">Progresso Geral</div>
+            <div class="progress-pct" id="proc-pct">0%</div>
+          </div>
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" id="proc-bar"></div>
+          </div>
+          <div class="progress-counts">
+            <span id="proc-count">0 de 847 fotos analisadas</span>
+            <span id="proc-found" style="color:var(--success)">0 encontradas</span>
+          </div>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat-box found">
+            <div class="stat-number" id="stat-found">0</div>
+            <div class="stat-desc">Encontradas</div>
+          </div>
+          <div class="stat-box review">
+            <div class="stat-number" id="stat-review">0</div>
+            <div class="stat-desc">Revisão manual</div>
+          </div>
+          <div class="stat-box skip">
+            <div class="stat-number" id="stat-dup">23</div>
+            <div class="stat-desc">Duplicatas ignoradas</div>
+          </div>
+        </div>
+
+        <div class="time-row">
+          <div class="time-item">
+            <div class="t-label">Decorrido</div>
+            <div class="t-value" id="proc-elapsed">0:00</div>
+          </div>
+          <div class="time-item">
+            <div class="t-label">Foto atual</div>
+            <div class="t-value" id="proc-current" style="font-size:11px; color:var(--text-secondary)">IMG_0001.jpg</div>
+          </div>
+          <div class="time-item">
+            <div class="t-label">Estimado</div>
+            <div class="t-value" id="proc-eta">--:--</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-label" style="margin-bottom:6px">Log em tempo real</div>
+          <div class="log-box" id="proc-log">
+            <div class="log-entry"><span class="log-time">00:00:00</span><span class="log-msg">Iniciando análise... 847 fotos no acervo, 23 duplicatas ignoradas.</span></div>
+            <div class="log-entry"><span class="log-time">00:00:01</span><span class="log-msg">GPU detectada: NVIDIA GeForce RTX 3060 — usando CUDA.</span></div>
+          </div>
+        </div>
+
+        <div class="proc-controls">
+          <button class="btn btn-secondary" id="pause-btn" onclick="togglePause()">⏸ Pausar</button>
+          <button class="btn btn-danger" onclick="cancelProcessing()">✕ Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       T05 — RESULTADOS
+  ══════════════════════════════════════════════════════ -->
+  <div id="screen-results" class="screen">
+    <div class="topbar">
+      <div class="topbar-logo" onclick="goTo('screen-home')" style="cursor:pointer">
+        <img src="assets/logo_icon.jpg" alt="Logo Icon" />
+        <span>FacePhoto</span>
+      </div>
+      <div class="topbar-right">
+        <div class="theme-switcher-box">
+          <span class="theme-switcher-label">Tema:</span>
+          <button class="theme-option active" id="btn-theme-dark-res" onclick="setTheme('dark')">🌙 Escuro</button>
+          <button class="theme-option" id="btn-theme-light-res" onclick="setTheme('light')">☀️ Claro</button>
+          <button class="theme-option" id="btn-theme-system-res" onclick="setTheme('system')">💻 Auto</button>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="goTo('screen-home')">← Início</button>
+        <button class="btn btn-primary btn-sm" onclick="goTo('screen-config')">+ Nova Busca</button>
+      </div>
+    </div>
+    <div class="breadcrumb">
+      <div class="breadcrumb-item"><span onclick="goTo('screen-home')" style="cursor:pointer">🏠 Início</span></div>
+      <div class="breadcrumb-sep">›</div>
+      <div class="breadcrumb-item active">Resultados · Vó Maria</div>
+    </div>
+    <div class="content">
+      <div class="results-header">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start">
+          <div>
+            <h1>Resultados encontrados 🎉</h1>
+            <p>Analisamos 824 fotos únicas e encontramos a <strong>Vó Maria</strong> em 38 delas.</p>
+          </div>
+          <div style="display:flex; gap:8px">
+            <div class="badge badge-success" style="font-size:13px; padding:6px 14px">824 analisadas</div>
+            <div class="badge badge-muted" style="font-size:13px; padding:6px 14px">23 duplicatas ignoradas</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('tab-confirmed', this)">
+          Confirmadas <span class="tab-count">34</span>
+        </button>
+        <button class="tab-btn" onclick="switchTab('tab-review', this)">
+          Revisão Manual <span class="tab-count" style="background:var(--warning-dim); color:var(--warning)">8</span>
+        </button>
+      </div>
+
+      <!-- Tab: Confirmadas -->
+      <div id="tab-confirmed" class="tab-panel active">
+        <div class="results-toolbar">
+          <div class="toolbar-left">
+            <div class="select-all-btn" onclick="toggleSelectAll()">
+              <span id="select-all-icon">☑</span>
+              <span id="select-all-text">Desmarcar Tudo</span>
+            </div>
+            <div class="selection-count"><span id="selected-count">34</span> de 34 selecionadas</div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center">
+            <div class="text-sm text-secondary">Ordenar por: <strong>Confiança ↓</strong></div>
+          </div>
+        </div>
+        <div class="photo-grid" id="photo-grid-confirmed"></div>
+      </div>
+
+      <!-- Tab: Revisão Manual -->
+      <div id="tab-review" class="tab-panel">
+        <div style="background:var(--warning-dim); border:1px solid rgba(251,191,36,.3); border-radius:var(--radius-md); padding:12px 16px; margin-bottom:16px; font-size:13px; color:var(--warning)">
+          ⚠ Estas fotos têm confiança menor que o threshold configurado. Revise e confirme ou rejeite cada uma.
+        </div>
+        <div class="photo-grid" id="photo-grid-review"></div>
+      </div>
+    </div>
+    <div class="results-footer">
+      <div style="font-size:12px; color:var(--text-secondary)">
+        <strong id="footer-selected" style="color:var(--text-primary)">34 fotos</strong> selecionadas para cópia →
+        <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-muted)">C:\Users\João\Desktop\Fotos Vó Maria\</span>
+      </div>
+      <div style="display:flex; gap:10px">
+        <button class="btn btn-secondary" onclick="goTo('screen-home')">Cancelar</button>
+        <button class="btn btn-primary btn-lg" onclick="goTo('screen-report')">
+          📋 Copiar Selecionadas
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       T05b — VISUALIZADOR DE FOTO
+  ══════════════════════════════════════════════════════ -->
+  <div id="screen-viewer" class="screen">
+    <div class="viewer-topbar">
+      <button class="btn btn-secondary btn-sm" onclick="goTo('screen-results')">← Voltar aos Resultados</button>
+      <div class="viewer-nav">
+        <button class="btn btn-secondary btn-sm">← Anterior</button>
+        <span class="text-sm text-secondary" style="padding:0 12px">Foto 5 de 34</span>
+        <button class="btn btn-secondary btn-sm">Próxima →</button>
+      </div>
+      <div style="display:flex; gap:8px">
+        <button class="btn btn-secondary btn-sm">🔍 Zoom</button>
+        <button class="btn btn-ghost btn-sm" onclick="goTo('screen-results')">✕</button>
+      </div>
+    </div>
+    <div class="viewer-body">
+      <div class="viewer-main">
+        <div class="viewer-photo-mock">
+          <div class="viewer-face-icon">🏡</div>
+          <div class="viewer-face-label">Vó Maria · 89%</div>
+          <div class="viewer-face-rect"></div>
+        </div>
+      </div>
+      <div class="viewer-sidebar">
+        <div class="card-title">Detalhes da Foto</div>
+        <div class="meta-group">
+          <div class="meta-item">
+            <div class="meta-label">Arquivo</div>
+            <div class="meta-value">IMG_4521.jpg</div>
+          </div>
+          <div class="meta-item">
+            <div class="meta-label">Caminho</div>
+            <div class="meta-value" style="font-size:11px">D:\HD_Externo\Fotos Família\2019\Natal\IMG_4521.jpg</div>
+          </div>
+          <div class="meta-item">
+            <div class="meta-label">Data da foto</div>
+            <div class="meta-value">25 de Dezembro de 2019</div>
+          </div>
+          <div class="meta-item">
+            <div class="meta-label">Câmera</div>
+            <div class="meta-value">Apple iPhone 11</div>
+          </div>
+          <div class="meta-item">
+            <div class="meta-label">Dimensões</div>
+            <div class="meta-value">4032 × 3024 px · 3.2 MB</div>
+          </div>
+        </div>
+        <div class="separator"></div>
+        <div class="confidence-bar-wrap">
+          <div class="card-title">Confiança de Reconhecimento</div>
+          <div class="conf-header">
+            <div style="font-size:12px; color:var(--text-secondary)">Vó Maria</div>
+            <div class="conf-pct">89%</div>
+          </div>
+          <div class="conf-bar-track">
+            <div class="conf-bar-fill"></div>
+          </div>
+          <div class="text-sm text-secondary mt-8">✓ Resultado confirmado — acima do threshold (60%)</div>
+        </div>
+        <div class="separator"></div>
+        <div class="viewer-actions" style="flex-direction:column; gap:8px">
+          <button class="btn btn-danger w-full" onclick="goTo('screen-results')">✗ Desmarcar esta foto</button>
+          <button class="btn btn-primary w-full" onclick="goTo('screen-results')">✓ Manter selecionada</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       T06 — RELATÓRIO FINAL
+  ══════════════════════════════════════════════════════ -->
+  <div id="screen-report" class="screen">
+    <div class="topbar">
+      <div class="topbar-logo" onclick="goTo('screen-home')" style="cursor:pointer">
+        <img src="assets/logo_icon.jpg" alt="Logo Icon" />
+        <span>FacePhoto</span>
+      </div>
+      <div class="topbar-right">
+        <div class="theme-switcher-box">
+          <span class="theme-switcher-label">Tema:</span>
+          <button class="theme-option active" id="btn-theme-dark-rep" onclick="setTheme('dark')">🌙 Escuro</button>
+          <button class="theme-option" id="btn-theme-light-rep" onclick="setTheme('light')">☀️ Claro</button>
+          <button class="theme-option" id="btn-theme-system-rep" onclick="setTheme('system')">💻 Auto</button>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1; display:flex; align-items:center; justify-content:center; overflow-y:auto; padding:24px">
+      <div class="report-wrap">
+        <div class="report-success-icon">✓</div>
+        <div>
+          <div class="report-title">Busca concluída! 🎉</div>
+          <div class="report-subtitle mt-8">As fotos da <strong>Vó Maria</strong> foram copiadas com sucesso.</div>
+        </div>
+        <div class="report-grid">
+          <div class="report-stat highlight">
+            <div class="r-number">33</div>
+            <div class="r-label">Fotos copiadas</div>
+          </div>
+          <div class="report-stat">
+            <div class="r-number">824</div>
+            <div class="r-label">Fotos analisadas</div>
+          </div>
+          <div class="report-stat">
+            <div class="r-number" style="color:var(--warning)">8</div>
+            <div class="r-label">Revisão manual</div>
+          </div>
+          <div class="report-stat">
+            <div class="r-number" style="color:var(--text-muted)">23</div>
+            <div class="r-label">Duplicatas ignoradas</div>
+          </div>
+          <div class="report-stat">
+            <div class="r-number" style="font-size:20px">3:42</div>
+            <div class="r-label">Tempo total</div>
+          </div>
+          <div class="report-stat">
+            <div class="r-number" style="color:var(--accent); font-size:20px">GPU</div>
+            <div class="r-label">RTX 3060</div>
+          </div>
+        </div>
+        <div class="report-path">
+          <span style="font-size:20px">📂</span>
+          <div class="path-text">C:\Users\João\Desktop\Fotos Vó Maria\</div>
+          <button class="btn btn-secondary btn-sm">Abrir</button>
+        </div>
+        <div class="report-actions">
+          <button class="btn btn-primary btn-lg w-full" onclick="goTo('screen-config')">+ Nova Busca</button>
+          <div class="report-actions-row">
+            <button class="btn btn-secondary w-full" onclick="goTo('screen-home')">🏠 Início</button>
+            <button class="btn btn-secondary w-full">📋 Exportar Relatório</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Banner de protótipo -->
+<div class="proto-banner">
+  <div class="proto-dot"></div>
+  FacePhoto v1.0 · Suporte Dinâmico a Temas & Capa Dark 3D
+</div>
+
+<script>
+  /* ── SISTEMA DE TEMAS DINÂMICO & TROCA DE CAPA ──────────────────── */
+  let currentThemeMode = 'dark';
+
+  function setTheme(mode) {
+    currentThemeMode = mode;
+    const htmlEl = document.documentElement;
+
+    let activeTheme = mode;
+    if (mode === 'system') {
+      activeTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+
+    htmlEl.setAttribute('data-theme', activeTheme);
+
+    // Atualiza estado visual de TODOS os seletores de tema no app
+    document.querySelectorAll('.theme-option').forEach(btn => {
+      btn.classList.remove('active');
+      if ((mode === 'dark' && btn.id.includes('dark')) ||
+          (mode === 'light' && btn.id.includes('light')) ||
+          (mode === 'system' && btn.id.includes('system'))) {
+        btn.classList.add('active');
+      }
+    });
+
+    // Troca dinamicamente a imagem da capa entre Dark (Logo 3D) e Light
+    const welcomeImg = document.getElementById('welcome-banner-img');
+    if (welcomeImg) {
+      welcomeImg.src = (activeTheme === 'dark') ? 'assets/logo_banner_dark.png' : 'assets/logo_banner.png';
+    }
+  }
+
+  // Escuta alteração do SO se estiver no modo 'system'
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+    if (currentThemeMode === 'system') {
+      setTheme('system');
+    }
+  });
+
+  /* ── NAVEGAÇÃO ──────────────────────────────────────────────────── */
+  function goTo(screenId) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(screenId).classList.add('active');
+  }
+
+  /* ── TABS ──────────────────────────────────────────────────────── */
+  function switchTab(panelId, btn) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(panelId).classList.add('active');
+    btn.classList.add('active');
+  }
+
+  /* ── GERAR GRID DE FOTOS ───────────────────────────────────────── */
+  const EMOJIS = ['🌳','🏡','🎄','🌊','🏖','🎉','🎂','🍽','🌺','🏔','🎸','☕','🌙','🎊','🌅','🏄'];
+  const NAMES  = ['IMG_4521','IMG_3302','DSC_0112','foto_natal','IMG_7843','DSC_1024','IMG_2201','foto_aniv','IMG_5512','DSC_9901','IMG_0043','IMG_3388','foto_fam','IMG_6612','DSC_4421','IMG_8801'];
+  const SCORES_CONF   = [94,91,89,87,85,84,82,80,79,78,77,75,74,73,72,71,70,69,68,67,66,65,64,63,62,61,60,60,60,60,60,60,60,60];
+  const SCORES_REVIEW = [58,55,52,49,47,45,43,40];
+
+  let selectedCount = 34;
+  let allSelected   = true;
+
+  function buildGrid(containerId, scores, isReview) {
+    const grid = document.getElementById(containerId);
+    grid.innerHTML = '';
+    scores.forEach((score, i) => {
+      const div = document.createElement('div');
+      div.className = 'photo-thumb' + (isReview ? ' review-item' : ' selected');
+      div.setAttribute('data-idx', i);
+      div.setAttribute('data-review', isReview);
+      const scoreClass = score >= 75 ? 'score-high' : score >= 60 ? 'score-mid' : 'score-low';
+      const boxClass   = isReview ? 'photo-face-box review' : 'photo-face-box';
+      const hue = (i * 47 + 190) % 360;
+      div.innerHTML = `
+        <div class="photo-face-mock" style="background:var(--card-bg-mock)">
+          <span style="opacity:.4">${EMOJIS[i % EMOJIS.length]}</span>
+          <div class="${boxClass}"></div>
+        </div>
+        <div class="photo-thumb-footer">
+          <span class="photo-score ${scoreClass}">${score}%</span>
+          <div class="photo-checkbox"></div>
+        </div>
+        ${isReview ? `
+        <div class="review-actions">
+          <button class="review-btn accept" title="Confirmar" onclick="acceptReview(event, this)">✓</button>
+          <button class="review-btn reject" title="Rejeitar"  onclick="rejectItem(event, this)">✕</button>
+        </div>` : ''}
+      `;
+      if (!isReview) {
+        div.addEventListener('click', function(e) {
+          if (e.target.closest('.review-actions')) return;
+          const isViewer = !e.target.closest('.photo-checkbox') && !e.target.closest('.review-actions');
+          if (isViewer && !e.target.closest('.photo-checkbox')) {
+            goTo('screen-viewer'); return;
+          }
+          toggleThumb(this);
+        });
+      }
+      grid.appendChild(div);
+    });
+  }
+
+  function toggleThumb(thumb) {
+    const wasSelected = thumb.classList.contains('selected');
+    if (wasSelected) { thumb.classList.remove('selected'); selectedCount--; }
+    else             { thumb.classList.add('selected');    selectedCount++; }
+    updateSelectionUI();
+  }
+
+  function toggleSelectAll() {
+    allSelected = !allSelected;
+    const thumbs = document.querySelectorAll('#tab-confirmed .photo-thumb');
+    thumbs.forEach(t => allSelected ? t.classList.add('selected') : t.classList.remove('selected'));
+    selectedCount = allSelected ? 34 : 0;
+    document.getElementById('select-all-icon').textContent = allSelected ? '☑' : '☐';
+    document.getElementById('select-all-text').textContent = allSelected ? 'Desmarcar Tudo' : 'Selecionar Tudo';
+    updateSelectionUI();
+  }
+
+  function updateSelectionUI() {
+    document.getElementById('selected-count').textContent = selectedCount;
+    document.getElementById('footer-selected').textContent = selectedCount + ' fotos';
+  }
+
+  function acceptReview(e, btn) {
+    e.stopPropagation();
+    const thumb = btn.closest('.photo-thumb');
+    thumb.style.opacity = '.4';
+    thumb.style.pointerEvents = 'none';
+    setTimeout(() => thumb.remove(), 300);
+    selectedCount++;
+    updateSelectionUI();
+  }
+
+  function rejectItem(e, btn) {
+    e.stopPropagation();
+    const thumb = btn.closest('.photo-thumb');
+    thumb.style.opacity = '.4';
+    thumb.style.pointerEvents = 'none';
+    setTimeout(() => thumb.remove(), 300);
+  }
+
+  /* ── SIMULAÇÃO DE PROCESSAMENTO ─────────────────────────────────── */
+  let procInterval = null;
+  let elapsedSec   = 0;
+  let currentPhoto = 0;
+  const TOTAL      = 847;
+  let foundCount   = 0;
+  let reviewCount  = 0;
+  let isPaused     = false;
+  let procDone     = false;
+
+  const LOG_EVENTS = [
+    {at: 60,  type:'found',   name:'IMG_4521.jpg', score:94},
+    {at: 120, type:'found',   name:'DSC_0112.jpg', score:91},
+    {at: 190, type:'normal',  name:'IMG_9312.jpg'},
+    {at: 250, type:'found',   name:'foto_natal.jpg', score:87},
+    {at: 310, type:'warning', name:'IMG_0231.jpg', score:52},
+    {at: 380, type:'found',   name:'IMG_7843.jpg', score:85},
+    {at: 440, type:'normal',  name:'DSC_5512.jpg'},
+    {at: 510, type:'found',   name:'DSC_1024.jpg', score:82},
+    {at: 570, type:'found',   name:'IMG_2201.jpg', score:80},
+    {at: 640, type:'warning', name:'IMG_3301.jpg', score:47},
+    {at: 700, type:'found',   name:'foto_aniv.jpg', score:78},
+    {at: 760, type:'found',   name:'IMG_5512.jpg', score:77},
+    {at: 824, type:'done'},
+  ];
+
+  function fmtTime(sec) {
+    const m = Math.floor(sec/60), s = sec % 60;
+    return m + ':' + String(s).padStart(2,'0');
+  }
+
+  function addLog(type, msg) {
+    const box = document.getElementById('proc-log');
+    const entry = document.createElement('div');
+    entry.className = 'log-entry ' + (type === 'found' ? 'found' : type === 'warning' ? 'warning' : '');
+    const timeStr = new Date().toTimeString().slice(0,8);
+    entry.innerHTML = `<span class="log-time">${timeStr}</span><span class="log-msg">${msg}</span>`;
+    box.appendChild(entry);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function startProcessing() {
+    goTo('screen-processing');
+    elapsedSec  = 0; currentPhoto = 0;
+    foundCount  = 0; reviewCount  = 0;
+    isPaused    = false; procDone = false;
+
+    document.getElementById('proc-bar').style.width   = '0%';
+    document.getElementById('proc-pct').textContent   = '0%';
+    document.getElementById('proc-count').textContent = '0 de 847 fotos analisadas';
+    document.getElementById('proc-found').textContent = '0 encontradas';
+    document.getElementById('stat-found').textContent  = '0';
+    document.getElementById('stat-review').textContent = '0';
+    document.getElementById('proc-elapsed').textContent = '0:00';
+    document.getElementById('proc-eta').textContent    = '--:--';
+    document.getElementById('pause-btn').textContent   = '⏸ Pausar';
+    document.getElementById('proc-log').innerHTML = `
+      <div class="log-entry"><span class="log-time">${new Date().toTimeString().slice(0,8)}</span><span class="log-msg">Iniciando análise... 847 fotos no acervo, 23 duplicatas ignoradas.</span></div>
+      <div class="log-entry"><span class="log-time">${new Date().toTimeString().slice(0,8)}</span><span class="log-msg">GPU detectada: NVIDIA GeForce RTX 3060 — usando CUDA.</span></div>
+      <div class="log-entry"><span class="log-time">${new Date().toTimeString().slice(0,8)}</span><span class="log-msg">Fase 1: Cálculo de hash perceptual (deduplicação)...</span></div>
+    `;
+
+    const SPEED = 7;
+
+    procInterval = setInterval(() => {
+      if (isPaused) return;
+      elapsedSec++;
+      document.getElementById('proc-elapsed').textContent = fmtTime(elapsedSec);
+
+      currentPhoto = Math.min(currentPhoto + SPEED, TOTAL);
+      const pct = Math.round((currentPhoto / TOTAL) * 100);
+      document.getElementById('proc-bar').style.width    = pct + '%';
+      document.getElementById('proc-pct').textContent    = pct + '%';
+      document.getElementById('proc-count').textContent  = currentPhoto + ' de ' + TOTAL + ' fotos analisadas';
+      document.getElementById('proc-found').textContent  = foundCount + ' encontradas';
+      document.getElementById('stat-found').textContent  = foundCount;
+      document.getElementById('stat-review').textContent = reviewCount;
+
+      const remaining = Math.ceil((TOTAL - currentPhoto) / SPEED);
+      document.getElementById('proc-eta').textContent = remaining > 0 ? fmtTime(remaining) : '0:00';
+
+      const fileIdx = Math.floor(currentPhoto / 40) % NAMES.length;
+      document.getElementById('proc-current').textContent = NAMES[fileIdx] + '.jpg';
+
+      if (pct < 15) {
+        document.getElementById('proc-phase').textContent = 'Fase: Deduplicação (hash)';
+      } else if (pct < 25) {
+        document.getElementById('proc-phase').textContent = 'Fase: Carregando modelos de IA';
+      } else {
+        document.getElementById('proc-phase').textContent = 'Fase: Reconhecimento Facial';
+      }
+
+      const event = LOG_EVENTS.find(ev => ev.at <= currentPhoto && ev.at > currentPhoto - SPEED);
+      if (event) {
+        if (event.type === 'found') {
+          foundCount++;
+          addLog('found', `✓ Match encontrado (${event.score}%) — ${event.name} · Vó Maria`);
+        } else if (event.type === 'warning') {
+          reviewCount++;
+          addLog('warning', `⚠ Confiança baixa (${event.score}%) — ${event.name} → Revisão manual`);
+        } else if (event.type === 'done') {
+        } else {
+          if (Math.random() > .7) addLog('', `Analisando: ${event.name}`);
+        }
+      }
+
+      if (currentPhoto >= TOTAL) {
+        clearInterval(procInterval);
+        procDone = true;
+        document.getElementById('proc-pct').textContent    = '100%';
+        document.getElementById('proc-bar').style.width    = '100%';
+        document.getElementById('proc-count').textContent  = TOTAL + ' de ' + TOTAL + ' fotos analisadas';
+        document.getElementById('proc-eta').textContent    = '0:00';
+        document.getElementById('proc-phase').textContent  = '✓ Processamento concluído!';
+        document.getElementById('proc-title').textContent  = 'Análise concluída! 🎉';
+        document.getElementById('proc-sub').textContent    = foundCount + ' fotos encontradas · Clique abaixo para revisar';
+        document.getElementById('stat-found').textContent  = foundCount;
+        document.getElementById('stat-review').textContent = reviewCount;
+        document.getElementById('proc-found').textContent  = foundCount + ' encontradas';
+        addLog('found', `✓ Análise concluída! ${foundCount} fotos encontradas, ${reviewCount} para revisão manual.`);
+
+        const controls = document.querySelector('.proc-controls');
+        controls.innerHTML = `<button class="btn btn-primary btn-lg" onclick="goTo('screen-results')">Ver Resultados (${foundCount + reviewCount}) →</button>`;
+      }
+    }, 100);
+  }
+
+  function togglePause() {
+    if (procDone) return;
+    isPaused = !isPaused;
+    const btn = document.getElementById('pause-btn');
+    if (isPaused) {
+      btn.textContent = '▶ Retomar';
+      btn.className   = 'btn btn-primary';
+      document.getElementById('proc-phase').textContent = '⏸ Processamento pausado';
+      addLog('warning', '⏸ Processamento pausado pelo usuário.');
+    } else {
+      btn.textContent = '⏸ Pausar';
+      btn.className   = 'btn btn-secondary';
+      addLog('', '▶ Processamento retomado.');
+    }
+  }
+
+  function cancelProcessing() {
+    clearInterval(procInterval);
+    goTo('screen-home');
+  }
+
+  /* ── INIT ──────────────────────────────────────────────────────── */
+  buildGrid('photo-grid-confirmed', SCORES_CONF,   false);
+  buildGrid('photo-grid-review',    SCORES_REVIEW, true);
+  setTheme('dark');
+</script>
+</body>
+</html>

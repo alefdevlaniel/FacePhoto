@@ -1,0 +1,57 @@
+[project]
+name = "facephoto"
+version = "1.0.0"
+description = "Reconhecimento Facial em Fotos — 100% Offline & Privado"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Equipe FacePhoto" }
+]
+
+dependencies = [
+    # API & Backend Async
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.7.0",
+
+    # Motor de Reconhecimento Facial & IA
+    "deepface>=0.0.93",
+    "onnxruntime>=1.18.0",
+
+    # Processamento de Imagem & Formatos
+    "opencv-python-headless>=4.9.0",
+    "Pillow>=10.3.0",
+    "rawpy>=0.22.0",
+    "pillow-heif>=0.16.0",
+
+    # Deduplicação
+    "ImageHash>=4.3.1",
+
+    # Utilitários de Sistema
+    "platformdirs>=4.2.0",
+    "tqdm>=4.66.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-mock>=3.14.0",
+    "coverage>=7.5.0",
+    "httpx>=0.27.0",
+    "ruff>=0.4.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
