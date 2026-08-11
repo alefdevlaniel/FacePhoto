@@ -3,6 +3,15 @@ Motor de Reconhecimento Facial abstrato e concreto (DeepFace).
 Define a interface FaceEngineBase para desacoplamento e facilita futuras migrações (ex: InsightFace).
 """
 
+import os
+
+# Configuração de limites de threads da CPU para evitar congelamento do sistema
+os.environ.setdefault("OMP_NUM_THREADS", "2")
+os.environ.setdefault("TF_NUM_INTRAOP_THREADS", "2")
+os.environ.setdefault("TF_NUM_INTEROP_THREADS", "2")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "2")
+os.environ.setdefault("MKL_NUM_THREADS", "2")
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import logging

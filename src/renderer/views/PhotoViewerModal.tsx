@@ -5,12 +5,20 @@ interface PhotoViewerModalProps {
   isOpen: boolean;
   photo: ResultadoDTO | null;
   onClose: () => void;
+  onAccept?: (photo: ResultadoDTO) => void;
+  onReject?: (photo: ResultadoDTO) => void;
+  isSelected?: boolean;
+  onToggleSelect?: (photo: ResultadoDTO) => void;
 }
 
 export const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({
   isOpen,
   photo,
   onClose,
+  onAccept,
+  onReject,
+  isSelected,
+  onToggleSelect,
 }) => {
   if (!isOpen || !photo) return null;
 
@@ -20,6 +28,44 @@ export const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({
     const parts = caminho.split(/[/\\]/);
     return parts[parts.length - 1] || caminho;
   };
+
+  const renderBoundingBox = (bbox: any) => {
+    if (!bbox || typeof bbox !== 'object') return null;
+    const x = Number(bbox.x);
+    const y = Number(bbox.y);
+    const w = Number(bbox.w);
+    const h = Number(bbox.h);
+    if (isNaN(x) || isNaN(y) || isNaN(w) || isNaN(h)) return null;
+
+    const top = y <= 1 ? `${y * 100}%` : y <= 100 ? `${y}%` : '20%';
+    const left = x <= 1 ? `${x * 100}%` : x <= 100 ? `${x}%` : '20%';
+    const width = w <= 1 ? `${w * 100}%` : w <= 100 ? `${w}%` : '60%';
+    const height = h <= 1 ? `${h * 100}%` : h <= 100 ? `${h}%` : '60%';
+
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          top,
+          left,
+          width,
+          height,
+          border: '3px solid var(--accent)',
+          borderRadius: '8px',
+          boxShadow: '0 0 24px var(--accent-glow)',
+          pointerEvents: 'none',
+          zIndex: 2,
+        }}
+      />
+    );
+  };
+
+  const isConfirmed =
+    photo.status === 'confirmado' ||
+    photo.status === 'confirmado_manual' ||
+    photo.status === 'copiado';
+
+  const isReview = photo.status === 'revisao' || photo.status === 'revisao_manual';
 
   return (
     <div className="screen active" id="screen-viewer">
@@ -54,21 +100,7 @@ export const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({
                 (e.target as HTMLElement).style.display = 'none';
               }}
             />
-            {photo.bounding_box && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: `${photo.bounding_box.y}%`,
-                  left: `${photo.bounding_box.x}%`,
-                  width: `${photo.bounding_box.w}%`,
-                  height: `${photo.bounding_box.h}%`,
-                  border: '3px solid var(--accent)',
-                  borderRadius: '8px',
-                  boxShadow: '0 0 24px var(--accent-glow)',
-                  pointerEvents: 'none',
-                }}
-              ></div>
-            )}
+            {renderBoundingBox(photo.bounding_box)}
           </div>
         </div>
 
@@ -88,7 +120,7 @@ export const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({
             <div className="meta-item">
               <div className="meta-label">Status</div>
               <div className="meta-value">
-                {photo.status === 'confirmado' ? '✓ Confirmado' : '⚠ Revisão Manual'}
+                {isConfirmed ? '✓ Confirmado' : isReview ? '⚠ Revisão Manual' : photo.status}
               </div>
             </div>
           </div>
@@ -114,8 +146,41 @@ export const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({
           <div className="separator"></div>
 
           <div className="viewer-actions" style={{ flexDirection: 'column', gap: 8 }}>
-            <button className="btn btn-primary w-full" onClick={onClose}>
-              ✓ Fechar Visualização
+            {isReview && onAccept && (
+              <button
+                className="btn btn-primary w-full"
+                onClick={() => {
+                  onAccept(photo);
+                  onClose();
+                }}
+              >
+                ✓ Aceitar foto na seleção
+              </button>
+            )}
+
+            {isReview && onReject && (
+              <button
+                className="btn btn-danger w-full"
+                onClick={() => {
+                  onReject(photo);
+                  onClose();
+                }}
+              >
+                ✕ Rejeitar foto
+              </button>
+            )}
+
+            {isConfirmed && onToggleSelect && (
+              <button
+                className={`btn ${isSelected ? 'btn-secondary' : 'btn-primary'} w-full`}
+                onClick={() => onToggleSelect(photo)}
+              >
+                {isSelected ? '☐ Desmarcar para Cópia' : '☑ Selecionar para Cópia'}
+              </button>
+            )}
+
+            <button className="btn btn-secondary w-full" onClick={onClose}>
+              Fechar Visualização
             </button>
           </div>
         </div>
@@ -123,3 +188,4 @@ export const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({
     </div>
   );
 };
+

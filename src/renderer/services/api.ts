@@ -2,7 +2,7 @@
  * Serviço de API HTTP e streaming SSE para comunicação do Frontend React com o Backend FastAPI.
  */
 
-export const API_BASE_URL = 'http://127.0.0.1:8000';
+export const API_BASE_URL = 'http://127.0.0.1:8001';
 
 export interface HardwareStatusDTO {
   device_type: string;
@@ -40,7 +40,7 @@ export interface ResultadoDTO {
   pessoa_id: string;
   caminho_foto: string;
   score: number;
-  status: 'confirmado' | 'revisao_manual' | 'descartado';
+  status: string;
   bounding_box?: { x: number; y: number; w: number; h: number } | null;
   hash_arquivo: string;
   caminho_destino?: string | null;
@@ -127,6 +127,36 @@ export async function obterResultados(sessaoId: string): Promise<ResultadoDTO[]>
   const res = await fetch(`${API_BASE_URL}/api/sessoes/${sessaoId}/resultados`);
   if (!res.ok) throw new Error('Erro ao obter resultados');
   return res.json();
+}
+
+export async function atualizarStatusResultado(
+  sessaoId: string,
+  resultadoId: string,
+  novoStatus: string
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/sessoes/${sessaoId}/resultados/${resultadoId}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: novoStatus }),
+  });
+  if (!res.ok) throw new Error('Erro ao atualizar status do resultado');
+}
+
+export async function selecionarPastaNativa(titulo: string = 'Selecione uma pasta'): Promise<string | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/utils/selecionar-pasta`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ titulo }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.caminho || null;
+    }
+  } catch (err) {
+    console.warn('Erro ao chamar seletor de pasta nativo no servidor local:', err);
+  }
+  return null;
 }
 
 export async function copiarResultados(

@@ -1,0 +1,27 @@
+// vite.config.ts
+import { defineConfig } from "file:///E:/Backup%20Trabalho%20e%20Hobbys/Cursos%20e%20Trabalhos/PROJETOS%20PESSOAIS%20E%20TESTES/FacePhoto/node_modules/vite/dist/node/index.js";
+import react from "file:///E:/Backup%20Trabalho%20e%20Hobbys/Cursos%20e%20Trabalhos/PROJETOS%20PESSOAIS%20E%20TESTES/FacePhoto/node_modules/@vitejs/plugin-react/dist/index.js";
+import path from "path";
+var __vite_injected_original_dirname = "E:\\Backup Trabalho e Hobbys\\Cursos e Trabalhos\\PROJETOS PESSOAIS E TESTES\\FacePhoto";
+var vite_config_default = defineConfig({
+  plugins: [react()],
+  root: "src/renderer",
+  publicDir: "../../public",
+  build: {
+    outDir: "../../dist",
+    emptyOutDir: true
+  },
+  resolve: {
+    alias: {
+      "@": path.resolve(__vite_injected_original_dirname, "./src/renderer")
+    }
+  },
+  server: {
+    port: 3e3,
+    strictPort: true
+  }
+});
+export {
+  vite_config_default as default
+};
+//# sourceMappingURL=data:application/json;base64,ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidml0ZS5jb25maWcudHMiXSwKICAic291cmNlc0NvbnRlbnQiOiBbImNvbnN0IF9fdml0ZV9pbmplY3RlZF9vcmlnaW5hbF9kaXJuYW1lID0gXCJFOlxcXFxCYWNrdXAgVHJhYmFsaG8gZSBIb2JieXNcXFxcQ3Vyc29zIGUgVHJhYmFsaG9zXFxcXFBST0pFVE9TIFBFU1NPQUlTIEUgVEVTVEVTXFxcXEZhY2VQaG90b1wiO2NvbnN0IF9fdml0ZV9pbmplY3RlZF9vcmlnaW5hbF9maWxlbmFtZSA9IFwiRTpcXFxcQmFja3VwIFRyYWJhbGhvIGUgSG9iYnlzXFxcXEN1cnNvcyBlIFRyYWJhbGhvc1xcXFxQUk9KRVRPUyBQRVNTT0FJUyBFIFRFU1RFU1xcXFxGYWNlUGhvdG9cXFxcdml0ZS5jb25maWcudHNcIjtjb25zdCBfX3ZpdGVfaW5qZWN0ZWRfb3JpZ2luYWxfaW1wb3J0X21ldGFfdXJsID0gXCJmaWxlOi8vL0U6L0JhY2t1cCUyMFRyYWJhbGhvJTIwZSUyMEhvYmJ5cy9DdXJzb3MlMjBlJTIwVHJhYmFsaG9zL1BST0pFVE9TJTIwUEVTU09BSVMlMjBFJTIwVEVTVEVTL0ZhY2VQaG90by92aXRlLmNvbmZpZy50c1wiO2ltcG9ydCB7IGRlZmluZUNvbmZpZyB9IGZyb20gJ3ZpdGUnO1xuaW1wb3J0IHJlYWN0IGZyb20gJ0B2aXRlanMvcGx1Z2luLXJlYWN0JztcbmltcG9ydCBwYXRoIGZyb20gJ3BhdGgnO1xuXG5leHBvcnQgZGVmYXVsdCBkZWZpbmVDb25maWcoe1xuICBwbHVnaW5zOiBbcmVhY3QoKV0sXG4gIHJvb3Q6ICdzcmMvcmVuZGVyZXInLFxuICBwdWJsaWNEaXI6ICcuLi8uLi9wdWJsaWMnLFxuICBidWlsZDoge1xuICAgIG91dERpcjogJy4uLy4uL2Rpc3QnLFxuICAgIGVtcHR5T3V0RGlyOiB0cnVlLFxuICB9LFxuICByZXNvbHZlOiB7XG4gICAgYWxpYXM6IHtcbiAgICAgICdAJzogcGF0aC5yZXNvbHZlKF9fZGlybmFtZSwgJy4vc3JjL3JlbmRlcmVyJyksXG4gICAgfSxcbiAgfSxcbiAgc2VydmVyOiB7XG4gICAgcG9ydDogMzAwMCxcbiAgICBzdHJpY3RQb3J0OiB0cnVlLFxuICB9LFxufSk7XG4iXSwKICAibWFwcGluZ3MiOiAiO0FBQXFjLFNBQVMsb0JBQW9CO0FBQ2xlLE9BQU8sV0FBVztBQUNsQixPQUFPLFVBQVU7QUFGakIsSUFBTSxtQ0FBbUM7QUFJekMsSUFBTyxzQkFBUSxhQUFhO0FBQUEsRUFDMUIsU0FBUyxDQUFDLE1BQU0sQ0FBQztBQUFBLEVBQ2pCLE1BQU07QUFBQSxFQUNOLFdBQVc7QUFBQSxFQUNYLE9BQU87QUFBQSxJQUNMLFFBQVE7QUFBQSxJQUNSLGFBQWE7QUFBQSxFQUNmO0FBQUEsRUFDQSxTQUFTO0FBQUEsSUFDUCxPQUFPO0FBQUEsTUFDTCxLQUFLLEtBQUssUUFBUSxrQ0FBVyxnQkFBZ0I7QUFBQSxJQUMvQztBQUFBLEVBQ0Y7QUFBQSxFQUNBLFFBQVE7QUFBQSxJQUNOLE1BQU07QUFBQSxJQUNOLFlBQVk7QUFBQSxFQUNkO0FBQ0YsQ0FBQzsiLAogICJuYW1lcyI6IFtdCn0K

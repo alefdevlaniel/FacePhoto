@@ -2,7 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Topbar } from '../components/Topbar';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { PhotoViewerModal } from './PhotoViewerModal';
-import { API_BASE_URL, copiarResultados, obterResultados, ResultadoDTO } from '../services/api';
+import {
+  API_BASE_URL,
+  atualizarStatusResultado,
+  copiarResultados,
+  obterResultados,
+  ResultadoDTO,
+} from '../services/api';
 
 interface ResultsViewProps {
   sessaoId: string | null;
@@ -19,6 +25,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
 }) => {
   const [resultados, setResultados] = useState<ResultadoDTO[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'confirmed' | 'review'>('confirmed');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedPhoto, setSelectedPhoto] = useState<ResultadoDTO | null>(null);
@@ -31,14 +38,43 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
       setLoading(false);
       return;
     }
-    try {
-      const data = await obterResultados(sessaoId);
+    setLoading(true);
+    setErrorMsg(null);
+
+    let retries = 3;
+    let data: ResultadoDTO[] | null = null;
+    let lastError: any = null;
+
+    while (retries > 0) {
+      try {
+        data = await obterResultados(sessaoId);
+        break;
+      } catch (err: any) {
+        lastError = err;
+        retries -= 1;
+        if (retries > 0) {
+          await new Promise((res) => setTimeout(res, 1000));
+        }
+      }
+    }
+
+    if (data) {
       setResultados(data);
-      const confirmados = data.filter((r) => r.status === 'confirmado').map((r) => r.id);
+      const confirmados = data
+        .filter(
+          (r) =>
+            r.status === 'confirmado' ||
+            r.status === 'confirmado_manual' ||
+            r.status === 'copiado'
+        )
+        .map((r) => r.id);
       setSelectedIds(new Set(confirmados));
-    } catch (err) {
-      console.error('Erro ao buscar resultados do SQLite:', err);
-    } finally {
+      setLoading(false);
+    } else {
+      console.error('Erro ao buscar resultados do SQLite após retentativas:', lastError);
+      setErrorMsg(
+        lastError?.message || 'Não foi possível carregar os resultados do banco de dados SQLite local.'
+      );
       setLoading(false);
     }
   };
@@ -47,8 +83,16 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
     carregarResultadosReais();
   }, [sessaoId]);
 
-  const confirmados = resultados.filter((r) => r.status === 'confirmado');
-  const revisoes = resultados.filter((r) => r.status === 'revisao_manual');
+  const confirmados = resultados.filter(
+    (r) =>
+      r.status === 'confirmado' ||
+      r.status === 'confirmado_manual' ||
+      r.status === 'copiado'
+  );
+
+  const revisoes = resultados.filter(
+    (r) => r.status === 'revisao' || r.status === 'revisao_manual'
+  );
 
   const toggleSelect = (id: string) => {
     const next = new Set(selectedIds);
@@ -79,6 +123,36 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
     }
   };
 
+  const handleAcceptReview = async (item: ResultadoDTO) => {
+    if (!sessaoId) return;
+    try {
+      await atualizarStatusResultado(sessaoId, item.id, 'confirmado_manual');
+      setResultados((prev) =>
+        prev.map((r) => (r.id === item.id ? { ...r, status: 'confirmado_manual' } : r))
+      );
+      setSelectedIds((prev) => new Set(prev).add(item.id));
+    } catch (err) {
+      console.error('Erro ao aceitar foto:', err);
+    }
+  };
+
+  const handleRejectReview = async (item: ResultadoDTO) => {
+    if (!sessaoId) return;
+    try {
+      await atualizarStatusResultado(sessaoId, item.id, 'descartado');
+      setResultados((prev) =>
+        prev.map((r) => (r.id === item.id ? { ...r, status: 'descartado' } : r))
+      );
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+    } catch (err) {
+      console.error('Erro ao rejeitar foto:', err);
+    }
+  };
+
   const handleOpenViewer = (item: ResultadoDTO) => {
     setSelectedPhoto(item);
     setIsViewerOpen(true);
@@ -86,6 +160,37 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
 
   const markImageFailed = (id: string) => {
     setFailedImages((prev) => new Set(prev).add(id));
+  };
+
+  const renderBoundingBox = (bbox: any) => {
+    if (!bbox || typeof bbox !== 'object') return null;
+    const x = Number(bbox.x);
+    const y = Number(bbox.y);
+    const w = Number(bbox.w);
+    const h = Number(bbox.h);
+    if (isNaN(x) || isNaN(y) || isNaN(w) || isNaN(h)) return null;
+
+    const top = y <= 1 ? `${y * 100}%` : y <= 100 ? `${y}%` : '20%';
+    const left = x <= 1 ? `${x * 100}%` : x <= 100 ? `${x}%` : '20%';
+    const width = w <= 1 ? `${w * 100}%` : w <= 100 ? `${w}%` : '60%';
+    const height = h <= 1 ? `${h * 100}%` : h <= 100 ? `${h}%` : '60%';
+
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          top,
+          left,
+          width,
+          height,
+          border: '2px solid var(--accent)',
+          borderRadius: '4px',
+          boxShadow: '0 0 8px var(--accent-glow)',
+          zIndex: 2,
+          pointerEvents: 'none',
+        }}
+      />
+    );
   };
 
   return (
@@ -140,7 +245,26 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
           </button>
         </div>
 
-        {loading ? (
+        {errorMsg ? (
+          <div
+            className="card"
+            style={{
+              padding: 24,
+              textAlign: 'center',
+              background: 'var(--error-dim)',
+              borderColor: 'var(--error)',
+              color: 'var(--error)',
+              marginTop: 16,
+            }}
+          >
+            <div style={{ fontSize: 32, marginBottom: 8 }}>⚠️</div>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>Erro ao carregar os resultados</div>
+            <div style={{ fontSize: 13, marginTop: 4, marginBottom: 16 }}>{errorMsg}</div>
+            <button className="btn btn-primary btn-sm" onClick={carregarResultadosReais}>
+              🔄 Tentar Novamente
+            </button>
+          </div>
+        ) : loading ? (
           <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)' }}>
             Carregando previews do banco de dados local...
           </div>
@@ -198,23 +322,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
                         </div>
                       )}
 
-                      {/* Bounding box do rosto identificado */}
-                      {item.bounding_box && !isFailed && (
-                        <div
-                          style={{
-                            position: 'absolute',
-                            top: `${item.bounding_box.y}%`,
-                            left: `${item.bounding_box.x}%`,
-                            width: `${item.bounding_box.w}%`,
-                            height: `${item.bounding_box.h}%`,
-                            border: '2px solid var(--accent)',
-                            borderRadius: '4px',
-                            boxShadow: '0 0 8px var(--accent-glow)',
-                            zIndex: 2,
-                            pointerEvents: 'none',
-                          }}
-                        ></div>
-                      )}
+                      {!isFailed && renderBoundingBox(item.bounding_box)}
 
                       <div className="photo-thumb-footer" style={{ zIndex: 3 }}>
                         <span className="photo-score score-high">
@@ -273,10 +381,30 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
                         </div>
                       )}
 
-                      <div className="photo-thumb-footer" style={{ zIndex: 3 }}>
+                      {!isFailed && renderBoundingBox(item.bounding_box)}
+
+                      <div className="photo-thumb-footer" style={{ zIndex: 3, justifyContent: 'space-between' }}>
                         <span className="photo-score score-low">
                           {Math.round(item.score * 100)}%
                         </span>
+                        <div style={{ display: 'flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                          <button
+                            className="btn btn-primary btn-sm"
+                            style={{ padding: '2px 8px', fontSize: 11 }}
+                            onClick={() => handleAcceptReview(item)}
+                            title="Aceitar foto (Mover para Confirmadas)"
+                          >
+                            ✓ Aceitar
+                          </button>
+                          <button
+                            className="btn btn-danger btn-sm"
+                            style={{ padding: '2px 8px', fontSize: 11 }}
+                            onClick={() => handleRejectReview(item)}
+                            title="Rejeitar foto"
+                          >
+                            ✕
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -312,7 +440,12 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
         isOpen={isViewerOpen}
         photo={selectedPhoto}
         onClose={() => setIsViewerOpen(false)}
+        onAccept={handleAcceptReview}
+        onReject={handleRejectReview}
+        isSelected={selectedPhoto ? selectedIds.has(selectedPhoto.id) : false}
+        onToggleSelect={(p) => toggleSelect(p.id)}
       />
     </div>
   );
 };
+

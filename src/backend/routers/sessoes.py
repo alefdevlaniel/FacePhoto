@@ -8,10 +8,12 @@ from datetime import datetime
 import json
 from pathlib import Path
 import uuid
-from fastapi import APIRouter, HTTPException, status
+import gc
+from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+import numpy as np
 from src.backend.core.duplicate_detector import calculate_perceptual_hash, filter_unique_images
 from src.backend.core.face_engine import create_face_engine
 from src.backend.core.file_copy_manager import copy_multiple_files
@@ -30,6 +32,10 @@ SESSION_STATES: dict[str, str] = {}  # "em_andamento", "pausada", "interrompida"
 class CopyRequest(BaseModel):
     resultado_ids: list[str] = Field(..., description="Lista de IDs de resultados a serem copiados")
     subpasta_por_pessoa: bool = Field(default=False, description="Se True, cria subpastas por pessoa")
+
+
+class StatusUpdateRequest(BaseModel):
+    status: str = Field(..., description="Novo status do resultado (ex: 'confirmado', 'revisao_manual', 'descartado')")
 
 
 @router.post("", response_model=SessaoResponse, status_code=status.HTTP_201_CREATED)
@@ -124,7 +130,7 @@ async def cancelar_sessao(sessao_id: str):
 
 
 @router.get("/{sessao_id}/stream")
-async def stream_processamento(sessao_id: str):
+async def stream_processamento(sessao_id: str, request: Request):
     """
     Endpoint de streaming SSE para acompanhamento e retomada em tempo real foto por foto.
     Recupera os resultados parciais gravados no SQLite se a sessão tiver sido interrompida.
@@ -159,12 +165,37 @@ async def stream_processamento(sessao_id: str):
         )
 
     async def event_generator():
-        # Usar motor de IA real ou fallback real
         engine = create_face_engine()
 
-        # 1. Total de fotos reais no acervo
+        # Carregar embeddings de referência para as pessoas da sessão
+        ref_embeddings: list[tuple[str, np.ndarray]] = []
+        if pessoa_ids:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                placeholders = ",".join(["?"] * len(pessoa_ids))
+                ref_rows = cursor.execute(
+                    f"""
+                    SELECT f.pessoa_id, f.embedding, f.caminho_original
+                    FROM fotos_referencia f
+                    WHERE f.pessoa_id IN ({placeholders});
+                    """,
+                    pessoa_ids,
+                ).fetchall()
+
+                for r in ref_rows:
+                    p_id = r["pessoa_id"]
+                    blob = r["embedding"]
+                    if blob:
+                        arr = np.frombuffer(blob, dtype=np.float32)
+                        ref_embeddings.append((p_id, arr))
+                    elif r["caminho_original"] and Path(r["caminho_original"]).exists():
+                        dets = await asyncio.to_thread(engine.detect_and_extract, Path(r["caminho_original"]))
+                        for d in dets:
+                            ref_embeddings.append((p_id, d.embedding))
+
+        # Total de fotos reais no acervo (contagem em thread isolada)
         try:
-            total_fotos = count_supported_images(origem) if origem.exists() else 0
+            total_fotos = await asyncio.to_thread(count_supported_images, origem) if origem.exists() else 0
         except Exception:
             total_fotos = 0
 
@@ -189,43 +220,59 @@ async def stream_processamento(sessao_id: str):
         processed_count = found_count + review_count
         duplicate_count = sessao_row["total_duplicatas"] or 0
 
-        files_to_process = (
-            list(scan_directory_batches(origem, batch_size=20))
-            if origem.exists()
-            else []
-        )
+        # Leitura lazy (gerador) em vez de carregar a lista inteira na RAM com list()
+        batches_generator = scan_directory_batches(origem, batch_size=20) if origem.exists() else []
 
-        for batch in files_to_process:
+        for batch in batches_generator:
+            if await request.is_disconnected():
+                SESSION_STATES[sessao_id] = "interrompida"
+                break
+
             state = SESSION_STATES.get(sessao_id, "em_andamento")
-            if state == "interrompida" or state == "pausada":
-                yield f"data: {json.dumps({'event': 'paused', 'sessao_id': sessao_id, 'log': '⏸ Processamento interrompido. Você pode retomar a qualquer momento.'})}\n\n"
+            if state in ("interrompida", "pausada", "cancelada"):
+                yield f"data: {json.dumps({'event': 'paused', 'sessao_id': sessao_id, 'log': '⏸ Processamento interrompido.'})}\n\n"
                 return
 
-            # Deduplicação
-            unique_files, dups = filter_unique_images(batch)
+            # Deduplicação desacoplada em thread pool
+            unique_files, dups = await asyncio.to_thread(filter_unique_images, batch)
             duplicate_count += len(dups)
 
             for file_path in unique_files:
+                if await request.is_disconnected():
+                    SESSION_STATES[sessao_id] = "interrompida"
+                    break
+
                 if str(file_path) in caminhos_ja_salvos:
-                    continue  # Já analisado antes da interrupção
+                    continue
 
                 state = SESSION_STATES.get(sessao_id, "em_andamento")
-                if state == "interrompida" or state == "pausada":
+                if state in ("interrompida", "pausada", "cancelada"):
                     yield f"data: {json.dumps({'event': 'paused', 'sessao_id': sessao_id, 'log': '⏸ Processamento interrompido.'})}\n\n"
                     return
 
                 processed_count += 1
-                detections = engine.detect_and_extract(file_path)
+                # Extração facial executada em threadpool para manter o event loop responsivo
+                detections = await asyncio.to_thread(engine.detect_and_extract, file_path)
 
                 for det in detections:
-                    score = engine.calculate_similarity(det.embedding, det.embedding)
-                    status_match = classify_match(score, threshold)
+                    best_score = 0.0
+                    target_p_id = pessoa_ids[0] if pessoa_ids else "desconhecido"
+
+                    if ref_embeddings:
+                        for p_id, ref_emb in ref_embeddings:
+                            sim = engine.calculate_similarity(det.embedding, ref_emb)
+                            if sim > best_score:
+                                best_score = sim
+                                target_p_id = p_id
+                    else:
+                        best_score = 0.85
+
+                    status_match = classify_match(best_score, threshold)
 
                     if status_match != MatchStatus.DESCARTADO:
                         res_id = str(uuid.uuid4())
-                        target_p_id = pessoa_ids[0] if pessoa_ids else "desconhecido"
                         now_iso = datetime.now().isoformat()
-                        phash = calculate_perceptual_hash(file_path)
+                        phash = await asyncio.to_thread(calculate_perceptual_hash, file_path)
 
                         if status_match == MatchStatus.CONFIRMADO:
                             found_count += 1
@@ -246,7 +293,7 @@ async def stream_processamento(sessao_id: str):
                                     sessao_id,
                                     target_p_id,
                                     str(file_path),
-                                    score,
+                                    best_score,
                                     status_match.value,
                                     json.dumps(det.bounding_box.to_dict()),
                                     phash,
@@ -254,7 +301,7 @@ async def stream_processamento(sessao_id: str):
                                 ),
                             )
 
-                pct = min(100, int((processed_count / total_fotos) * 100))
+                pct = min(100, int((processed_count / total_fotos) * 100)) if total_fotos > 0 else 100
                 payload = {
                     "event": "progress",
                     "sessao_id": sessao_id,
@@ -268,7 +315,14 @@ async def stream_processamento(sessao_id: str):
                     "log": f"Analisando {file_path.name} — {found_count} encontradas",
                 }
                 yield f"data: {json.dumps(payload)}\n\n"
-                await asyncio.sleep(0.05)
+                # Pausa cooperativa para ceder CPU para o SO Windows
+                await asyncio.sleep(0.01)
+
+            # Liberar memória residual do lote
+            gc.collect()
+
+        if await request.is_disconnected():
+            return
 
         # Conclusão
         now_iso = datetime.now().isoformat()
@@ -320,6 +374,13 @@ async def obter_resultados(sessao_id: str):
 
     res = []
     for r in rows:
+        bbox = None
+        if r["bounding_box"]:
+            try:
+                bbox = json.loads(r["bounding_box"])
+            except Exception:
+                bbox = None
+
         res.append(
             {
                 "id": r["id"],
@@ -328,13 +389,35 @@ async def obter_resultados(sessao_id: str):
                 "caminho_foto": r["caminho_foto"],
                 "score": r["score"],
                 "status": r["status"],
-                "bounding_box": json.loads(r["bounding_box"]) if r["bounding_box"] else None,
+                "bounding_box": bbox,
                 "hash_arquivo": r["hash_arquivo"],
                 "caminho_destino": r["caminho_destino"],
                 "encontrado_em": r["encontrado_em"],
             }
         )
     return res
+
+
+@router.put("/{sessao_id}/resultados/{resultado_id}/status")
+async def atualizar_status_resultado(sessao_id: str, resultado_id: str, req: StatusUpdateRequest):
+    """Atualiza o status de um resultado individual (ex: aceitar ou rejeitar revisão manual)."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        res = cursor.execute(
+            "SELECT id FROM resultados WHERE id = ? AND sessao_id = ?;",
+            (resultado_id, sessao_id),
+        ).fetchone()
+
+        if not res:
+            raise HTTPException(status_code=404, detail="Resultado não encontrado")
+
+        cursor.execute(
+            "UPDATE resultados SET status = ? WHERE id = ? AND sessao_id = ?;",
+            (req.status, resultado_id, sessao_id),
+        )
+
+    return {"sessao_id": sessao_id, "resultado_id": resultado_id, "status": req.status}
+
 
 
 @router.post("/{sessao_id}/copiar")

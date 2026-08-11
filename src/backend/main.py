@@ -42,16 +42,21 @@ app.include_router(pessoas.router)
 app.include_router(sessoes.router)
 
 
+from urllib.parse import unquote
+
+
 @app.get("/api/media")
 async def serve_media(path: str):
     """Serve arquivos de imagem locais para a interface React de forma segura."""
-    file_path = Path(path)
+    decoded_path = unquote(path)
+    file_path = Path(decoded_path)
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="Arquivo de imagem não encontrado")
     return FileResponse(str(file_path))
 
 
+
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("src.backend.main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("src.backend.main:app", host="127.0.0.1", port=8001, reload=True)

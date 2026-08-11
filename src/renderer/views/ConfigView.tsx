@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Topbar } from '../components/Topbar';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { FolderPickerModal } from '../components/FolderPickerModal';
+import { RefPhotosDropzone, RefPhotoItem } from '../components/RefPhotosDropzone';
 import { open as openTauriDialog } from '@tauri-apps/plugin-dialog';
 import {
   cadastrarPessoa,
   criarSessao,
   HardwareStatusDTO,
   obterHardwareStatus,
+  selecionarPastaNativa,
   SessaoDTO,
 } from '../services/api';
 
@@ -15,11 +17,6 @@ interface ConfigViewProps {
   onStartProcessingReal: (sessao: SessaoDTO) => void;
   onCancel: () => void;
   onNavigateHome: () => void;
-}
-
-interface RefPhotoItem {
-  path: string;
-  previewUrl: string;
 }
 
 export const ConfigView: React.FC<ConfigViewProps> = ({
@@ -36,6 +33,10 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hardwareInfo, setHardwareInfo] = useState<HardwareStatusDTO | null>(null);
   const [folderModalTarget, setFolderModalTarget] = useState<'source' | 'target' | null>(null);
+  const [draggingFolderTarget, setDraggingFolderTarget] = useState<'source' | 'target' | null>(null);
+
+  const sourceFileInputRef = React.useRef<HTMLInputElement>(null);
+  const targetFileInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     async function carregarHardware() {
@@ -45,26 +46,43 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     carregarHardware();
   }, []);
 
-  const handleAddRefPhotos = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const newItems: RefPhotoItem[] = [];
-      for (let i = 0; i < e.target.files.length; i++) {
-        const file = e.target.files[i];
-        const previewUrl = URL.createObjectURL(file);
-        // @ts-ignore
-        const filePath = file.path || file.name;
-        newItems.push({ path: filePath, previewUrl });
+  const handleFolderDragOver = (e: React.DragEvent, target: 'source' | 'target') => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
+    if (draggingFolderTarget !== target) setDraggingFolderTarget(target);
+  };
+
+  const handleFolderDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDraggingFolderTarget(null);
+  };
+
+  const handleFolderDrop = (e: React.DragEvent, target: 'source' | 'target') => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDraggingFolderTarget(null);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      const path = (file as any).path || file.name;
+      if (path) {
+        if (target === 'source') setSourcePath(path);
+        else setTargetPath(path);
       }
-      setRefPhotos((prev) => [...prev, ...newItems]);
     }
   };
 
   const handleBrowseFolder = async (target: 'source' | 'target') => {
+    const title = target === 'source' ? 'Selecione a Pasta de Origem' : 'Selecione a Pasta de Destino';
+
+    // 1. Tentar diálogo nativo Tauri
     try {
       const selected = await openTauriDialog({
         directory: true,
         multiple: false,
-        title: target === 'source' ? 'Selecione a Pasta de Origem' : 'Selecione a Pasta de Destino',
+        title,
       });
       if (selected && typeof selected === 'string') {
         if (target === 'source') setSourcePath(selected);
@@ -72,9 +90,39 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
         return;
       }
     } catch (err) {
-      console.warn('Nativo Tauri dialog indisponível (navegador). Usando seletor web:', err);
+      console.warn('Diálogo Tauri não disponível no ambiente web:', err);
     }
-    setFolderModalTarget(target);
+
+    // 2. Tentar seletor de pasta nativo do Windows via API do backend local Python
+    const caminhoNativo = await selecionarPastaNativa(title);
+    if (caminhoNativo) {
+      if (target === 'source') setSourcePath(caminhoNativo);
+      else setTargetPath(caminhoNativo);
+      return;
+    }
+
+    // 3. Fallback: disparar seletor HTML5 de diretório
+    if (target === 'source' && sourceFileInputRef.current) {
+      sourceFileInputRef.current.click();
+    } else if (target === 'target' && targetFileInputRef.current) {
+      targetFileInputRef.current.click();
+    } else {
+      setFolderModalTarget(target);
+    }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>, target: 'source' | 'target') => {
+    if (e.target.files && e.target.files.length > 0) {
+      const firstFile = e.target.files[0];
+      const fullPath = (firstFile as any).path;
+      if (fullPath) {
+        const parts = fullPath.split(/[/\\]/);
+        parts.pop();
+        const folderPath = parts.join('\\');
+        if (target === 'source') setSourcePath(folderPath);
+        else setTargetPath(folderPath);
+      }
+    }
   };
 
   const handleStartAnalysis = async () => {
@@ -176,39 +224,11 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                 />
               </div>
 
-              <div className="section-label" style={{ marginBottom: 10 }}>
-                Fotos de referência ({refPhotos.length} adicionadas)
-              </div>
-              <div className="ref-photos">
-                {refPhotos.map((item, idx) => (
-                  <div key={idx} className="ref-photo">
-                    <img
-                      src={item.previewUrl}
-                      alt={`Foto de referência ${idx + 1}`}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                    <button
-                      className="remove-btn"
-                      onClick={() =>
-                        setRefPhotos((items) => items.filter((_, i) => i !== idx))
-                      }
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-                <label className="add-photo-btn">
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handleAddRefPhotos}
-                    style={{ display: 'none' }}
-                  />
-                  <div className="icon">+</div>
-                  <div>Adicionar</div>
-                </label>
-              </div>
+              <RefPhotosDropzone
+                refPhotos={refPhotos}
+                onChange={setRefPhotos}
+                onValidationError={(msg) => setErrorMessage(msg)}
+              />
             </div>
 
             {/* Passo 2 */}
@@ -216,10 +236,16 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
             <div className="section-label">Passo 2</div>
             <div className="section-title">Onde estão suas fotos? (Pasta Origem)</div>
             <div className="section-sub">
-              Informe o caminho ou selecione a pasta do seu computador ou HD externo.
+              Informe o caminho, selecione a pasta ou arraste a pasta diretamente aqui.
             </div>
 
-            <div className="folder-picker" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+            <div
+              className={`folder-picker ${draggingFolderTarget === 'source' ? 'drag-active' : ''}`}
+              style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}
+              onDragOver={(e) => handleFolderDragOver(e, 'source')}
+              onDragLeave={handleFolderDragLeave}
+              onDrop={(e) => handleFolderDrop(e, 'source')}
+            >
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div className="folder-icon">📁</div>
                 <input
@@ -229,6 +255,15 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                   onChange={(e) => setSourcePath(e.target.value)}
                   placeholder="Caminho da pasta de origem (ex: C:\Users\nome\Pictures)..."
                   style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}
+                />
+                <input
+                  type="file"
+                  ref={sourceFileInputRef}
+                  // @ts-ignore
+                  webkitdirectory=""
+                  directory=""
+                  style={{ display: 'none' }}
+                  onChange={(e) => handleFileInputChange(e, 'source')}
                 />
                 <button
                   type="button"
@@ -248,7 +283,13 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
               As fotos serão <strong>copiadas</strong> — os originais permanecem intactos.
             </div>
 
-            <div className="folder-picker" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+            <div
+              className={`folder-picker ${draggingFolderTarget === 'target' ? 'drag-active' : ''}`}
+              style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}
+              onDragOver={(e) => handleFolderDragOver(e, 'target')}
+              onDragLeave={handleFolderDragLeave}
+              onDrop={(e) => handleFolderDrop(e, 'target')}
+            >
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div className="folder-icon">📂</div>
                 <input
@@ -259,6 +300,15 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                   placeholder="Caminho da pasta de destino (ex: C:\Users\nome\Desktop\Fotos)..."
                   style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}
                 />
+                <input
+                  type="file"
+                  ref={targetFileInputRef}
+                  // @ts-ignore
+                  webkitdirectory=""
+                  directory=""
+                  style={{ display: 'none' }}
+                  onChange={(e) => handleFileInputChange(e, 'target')}
+                />
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
@@ -268,6 +318,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                 </button>
               </div>
             </div>
+
 
             {/* Avançado */}
             <div className="separator" style={{ margin: '24px 0' }}></div>
