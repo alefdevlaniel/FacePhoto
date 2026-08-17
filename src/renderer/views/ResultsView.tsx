@@ -293,19 +293,21 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
                 {confirmados.map((item) => {
                   const isSelected = selectedIds.has(item.id);
                   const isFailed = failedImages.has(item.id);
-                  const mediaUrl = `${API_BASE_URL}/api/media?path=${encodeURIComponent(item.caminho_foto)}`;
+                  const thumbUrl = `${API_BASE_URL}/api/media?path=${encodeURIComponent(item.caminho_foto)}&thumb=true&size=360`;
 
                   return (
                     <div
                       key={item.id}
                       className={`photo-thumb ${isSelected ? 'selected' : ''}`}
                       onClick={() => handleOpenViewer(item)}
-                      style={{ position: 'relative', overflow: 'hidden' }}
+                      style={{ position: 'relative', overflow: 'hidden', cursor: 'pointer' }}
                     >
                       {!isFailed ? (
                         <img
-                          src={mediaUrl}
+                          src={thumbUrl}
                           alt="Preview da foto encontrada"
+                          loading="lazy"
+                          decoding="async"
                           style={{
                             position: 'absolute',
                             inset: 0,
@@ -313,6 +315,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
                             height: '100%',
                             objectFit: 'cover',
                             zIndex: 1,
+                            transition: 'opacity 0.2s ease',
                           }}
                           onError={() => markImageFailed(item.id)}
                         />
@@ -351,7 +354,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
             ) : (
               <div className="photo-grid">
                 {revisoes.map((item) => {
-                  const mediaUrl = `${API_BASE_URL}/api/media?path=${encodeURIComponent(item.caminho_foto)}`;
+                  const thumbUrl = `${API_BASE_URL}/api/media?path=${encodeURIComponent(item.caminho_foto)}&thumb=true&size=360`;
                   const isFailed = failedImages.has(item.id);
 
                   return (
@@ -359,12 +362,14 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
                       key={item.id}
                       className="photo-thumb review-item"
                       onClick={() => handleOpenViewer(item)}
-                      style={{ position: 'relative', overflow: 'hidden' }}
+                      style={{ position: 'relative', overflow: 'hidden', cursor: 'pointer' }}
                     >
                       {!isFailed ? (
                         <img
-                          src={mediaUrl}
+                          src={thumbUrl}
                           alt="Preview revisão"
+                          loading="lazy"
+                          decoding="async"
                           style={{
                             position: 'absolute',
                             inset: 0,

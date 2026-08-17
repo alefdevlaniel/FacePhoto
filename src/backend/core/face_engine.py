@@ -1,23 +1,20 @@
 """
-Motor de Reconhecimento Facial abstrato e concreto (DeepFace).
-Define a interface FaceEngineBase para desacoplamento e facilita futuras migrações (ex: InsightFace).
+Motor de Reconhecimento Facial de Alta Precisão (InsightFace v1.1).
+Utiliza ONNX Runtime com SCRFD para detecção facial e ArcFace (512-d) para extração de embeddings.
 """
-
-import os
-
-# Configuração de limites de threads da CPU para evitar congelamento do sistema
-os.environ.setdefault("OMP_NUM_THREADS", "2")
-os.environ.setdefault("TF_NUM_INTRAOP_THREADS", "2")
-os.environ.setdefault("TF_NUM_INTEROP_THREADS", "2")
-os.environ.setdefault("OPENBLAS_NUM_THREADS", "2")
-os.environ.setdefault("MKL_NUM_THREADS", "2")
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import logging
+import os
 from pathlib import Path
+from typing import Optional
 import numpy as np
-from PIL import Image
+
+# Configuração de limites de threads da CPU para garantir fluidez no Windows
+os.environ.setdefault("OMP_NUM_THREADS", "4")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "4")
+os.environ.setdefault("MKL_NUM_THREADS", "4")
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +25,22 @@ class FaceBoundingBox:
     y: int
     w: int
     h: int
+    x_pct: float = 0.0
+    y_pct: float = 0.0
+    w_pct: float = 0.0
+    h_pct: float = 0.0
 
-    def to_dict(self) -> dict[str, int]:
-        return {"x": self.x, "y": self.y, "w": self.w, "h": self.h}
+    def to_dict(self) -> dict[str, float]:
+        return {
+            "x": float(self.x),
+            "y": float(self.y),
+            "w": float(self.w),
+            "h": float(self.h),
+            "x_pct": float(self.x_pct),
+            "y_pct": float(self.y_pct),
+            "w_pct": float(self.w_pct),
+            "h_pct": float(self.h_pct),
+        }
 
 
 @dataclass
@@ -52,122 +62,140 @@ class FaceEngineBase(ABC):
     def calculate_similarity(
         self, embedding1: np.ndarray, embedding2: np.ndarray
     ) -> float:
-        """Calcula a similaridade de cosseno entre dois vetores de embedding (0.0 a 1.0)."""
+        """Calcula a similaridade calibrada entre dois vetores de embedding (0.0 a 1.0)."""
         pass
 
 
-class DeepFaceEngine(FaceEngineBase):
+class InsightFaceEngine(FaceEngineBase):
     """
-    Implementação concreta utilizando DeepFace (RetinaFace para detecção + ArcFace para embeddings).
+    Implementação concreta de alta precisão utilizando InsightFace (SCRFD + ArcFace 512-D com ONNX Runtime).
     """
 
-    def __init__(
-        self,
-        model_name: str = "ArcFace",
-        detector_backend: str = "retinaface",
-        enforce_detection: bool = False,
-    ):
+    _instance: Optional["InsightFaceEngine"] = None
+    _app = None
+
+    def __init__(self, model_name: str = "buffalo_l", ctx_id: int = 0, det_size: tuple[int, int] = (640, 640)):
         self.model_name = model_name
-        self.detector_backend = detector_backend
-        self.enforce_detection = enforce_detection
+        self.ctx_id = ctx_id
+        self.det_size = det_size
+        self._init_app()
 
-    def detect_and_extract(self, image_path: Path) -> list[FaceDetectionResult]:
-        results: list[FaceDetectionResult] = []
-        try:
-            from deepface import DeepFace
+    def _init_app(self):
+        if InsightFaceEngine._app is None:
+            import insightface
+            from insightface.app import FaceAnalysis
+            from src.backend.core.hardware_detector import get_optimal_onnx_providers
 
-            detections = DeepFace.represent(
-                img_path=str(image_path),
-                model_name=self.model_name,
-                detector_backend=self.detector_backend,
-                enforce_detection=self.enforce_detection,
-            )
+            candidate_providers = get_optimal_onnx_providers()
+            logger.info("Detectando provedores de hardware ideais: %s", candidate_providers)
 
-            for det in detections:
-                embedding = np.array(det["embedding"], dtype=np.float32)
-                region = det.get("facial_area", {})
-                bbox = FaceBoundingBox(
-                    x=region.get("x", 0),
-                    y=region.get("y", 0),
-                    w=region.get("w", 0),
-                    h=region.get("h", 0),
-                )
-                conf = det.get("confidence", 1.0)
-                results.append(
-                    FaceDetectionResult(
-                        bounding_box=bbox, embedding=embedding, confidence=conf
+            # Tentar inicialização com os melhores providers disponíveis, com fallback automático em cascata
+            app = None
+            last_err = None
+
+            for i in range(len(candidate_providers)):
+                attempt_providers = candidate_providers[i:]
+                try:
+                    logger.info("Tentando inicializar InsightFace com providers: %s", attempt_providers)
+                    app = FaceAnalysis(name=self.model_name, providers=attempt_providers)
+                    app.prepare(ctx_id=self.ctx_id, det_size=self.det_size)
+                    InsightFaceEngine._app = app
+                    logger.info(
+                        "✓ InsightFace Engine carregado com sucesso (Modelo: %s, Provedor ativo: %s)",
+                        self.model_name,
+                        attempt_providers[0],
                     )
-                )
+                    break
+                except Exception as err:
+                    logger.warning("Falha ao inicializar com providers %s: %s. Tentando próximo provider...", attempt_providers, err)
+                    last_err = err
 
-        except Exception as err:
-            logger.debug("Nenhum rosto detectado ou erro em %s: %s", image_path, err)
-
-        return results
-
-    def calculate_similarity(
-        self, embedding1: np.ndarray, embedding2: np.ndarray
-    ) -> float:
-        """
-        Calcula a similaridade de cosseno normalizada entre 0.0 e 1.0.
-        Sim = (dot(A, B) / (||A|| * ||B||) + 1) / 2
-        """
-        dot_product = np.dot(embedding1, embedding2)
-        norm_a = np.linalg.norm(embedding1)
-        norm_b = np.linalg.norm(embedding2)
-
-        if norm_a == 0 or norm_b == 0:
-            return 0.0
-
-        cosine_sim = dot_product / (norm_a * norm_b)
-        # Normalizar para faixa [0.0, 1.0]
-        return float(np.clip((cosine_sim + 1.0) / 2.0, 0.0, 1.0))
-
-
-class PILFaceEngine(FaceEngineBase):
-    """
-    Motor de análise de imagem real baseado em PIL (Pixel Data & Perceptual Features).
-    Utilizado como motor real quando bibliotecas de redes neurais pesadas não estão instaladas.
-    """
+            if InsightFaceEngine._app is None:
+                logger.error("Falha irreversível ao inicializar InsightFace em todos os providers: %s", last_err)
+                raise last_err
 
     def detect_and_extract(self, image_path: Path) -> list[FaceDetectionResult]:
         if not image_path.exists() or not image_path.is_file():
             return []
+
         try:
-            with Image.open(image_path) as img:
-                img_rgb = img.convert("RGB")
-                w, h = img_rgb.size
-                img_small = img_rgb.resize((64, 64))
-                arr = np.array(img_small, dtype=np.float32).flatten()
-                norm = np.linalg.norm(arr)
-                if norm > 0:
-                    arr /= norm
-                bbox = FaceBoundingBox(
-                    x=int(w * 0.2),
-                    y=int(h * 0.2),
-                    w=int(w * 0.6),
-                    h=int(h * 0.6),
-                )
-                return [
+            import cv2
+
+            # Leitura resiliente a caminhos Unicode / acentuados no Windows
+            img_bytes = np.fromfile(str(image_path), dtype=np.uint8)
+            img_bgr = cv2.imdecode(img_bytes, cv2.IMREAD_COLOR)
+
+            if img_bgr is None:
+                logger.warning("Não foi possível decodificar a imagem: %s", image_path)
+                return []
+
+            img_h, img_w = img_bgr.shape[:2]
+
+            # Inferência de detecção e extração de embedding 512-D
+            faces = InsightFaceEngine._app.get(img_bgr)
+            results: list[FaceDetectionResult] = []
+
+            for face in faces:
+                bbox_raw = face.bbox.astype(int)
+                x1, y1, x2, y2 = bbox_raw
+
+                # Normalizar coordenadas da bounding box dentro dos limites da imagem
+                x = max(0, int(x1))
+                y = max(0, int(y1))
+                w = max(1, min(img_w - x, int(x2 - x1)))
+                h = max(1, min(img_h - y, int(y2 - y1)))
+
+                x_pct = round(float(x / img_w), 4) if img_w > 0 else 0.0
+                y_pct = round(float(y / img_h), 4) if img_h > 0 else 0.0
+                w_pct = round(float(w / img_w), 4) if img_w > 0 else 0.0
+                h_pct = round(float(h / img_h), 4) if img_h > 0 else 0.0
+
+                bbox = FaceBoundingBox(x=x, y=y, w=w, h=h, x_pct=x_pct, y_pct=y_pct, w_pct=w_pct, h_pct=h_pct)
+
+                # Vetor de embedding ArcFace (512 dimensões)
+                raw_emb = face.embedding.astype(np.float32)
+                norm = np.linalg.norm(raw_emb)
+                normed_emb = raw_emb / norm if norm > 0 else raw_emb
+
+                conf = float(getattr(face, "det_score", 1.0))
+
+                results.append(
                     FaceDetectionResult(
                         bounding_box=bbox,
-                        embedding=arr,
-                        confidence=0.90,
+                        embedding=normed_emb,
+                        confidence=conf,
                     )
-                ]
+                )
+
+            return results
+
         except Exception as err:
-            logger.debug("Erro ao carregar imagem %s com PIL: %s", image_path, err)
+            logger.debug("Erro ao processar rosto em %s com InsightFace: %s", image_path, err)
             return []
 
     def calculate_similarity(
         self, embedding1: np.ndarray, embedding2: np.ndarray
     ) -> float:
-        dot_product = np.dot(embedding1, embedding2)
-        norm_a = np.linalg.norm(embedding1)
-        norm_b = np.linalg.norm(embedding2)
+        """
+        Calcula a similaridade de cosseno e calibra para a escala de probabilidade [0.0, 1.0].
+        No ArcFace (InsightFace):
+          - cos_sim >= 0.55 indica a mesma pessoa com altíssima certeza (>90%).
+          - cos_sim entre 0.38 e 0.55 indica área de revisão manual (~65% a 90%).
+          - cos_sim < 0.35 indica pessoas diferentes.
+        """
+        dot_product = float(np.dot(embedding1, embedding2))
+        norm_a = float(np.linalg.norm(embedding1))
+        norm_b = float(np.linalg.norm(embedding2))
+
         if norm_a == 0 or norm_b == 0:
             return 0.0
-        sim = dot_product / (norm_a * norm_b)
-        return float(np.clip((sim + 1.0) / 2.0, 0.0, 1.0))
+
+        raw_sim = dot_product / (norm_a * norm_b)
+
+        # Calibração linear suave do cosseno do ArcFace para percentual de confiança
+        # Mapeia [-0.10, 0.70] para a faixa de [0.0, 1.0]
+        calibrated = (raw_sim - 0.15) / 0.55
+        return float(np.clip(calibrated, 0.0, 1.0))
 
 
 class MockFaceEngine(FaceEngineBase):
@@ -181,10 +209,9 @@ class MockFaceEngine(FaceEngineBase):
     def detect_and_extract(self, image_path: Path) -> list[FaceDetectionResult]:
         if not image_path.exists():
             return []
-        # Gera um embedding determinístico simulado de 128 dimensões baseado no caminho
         seed = sum(ord(c) for c in str(image_path)) % 1000
         rng = np.random.default_rng(seed)
-        emb = rng.standard_normal(128, dtype=np.float32)
+        emb = rng.standard_normal(512, dtype=np.float32)
         emb /= np.linalg.norm(emb)
 
         return [
@@ -207,14 +234,22 @@ class MockFaceEngine(FaceEngineBase):
         return float(np.clip((sim + 1.0) / 2.0, 0.0, 1.0))
 
 
+_global_engine: Optional[FaceEngineBase] = None
+
+
 def create_face_engine(use_mock: bool = False) -> FaceEngineBase:
-    """Factory para instanciar o motor de reconhecimento facial apropriado."""
+    """Factory singleton para instanciar o motor de reconhecimento facial InsightFace."""
+    global _global_engine
     if use_mock:
         return MockFaceEngine()
-    try:
-        import deepface
-        return DeepFaceEngine()
-    except Exception:
-        logger.info("DeepFace não carregado. Utilizando motor PIL/Feature real.")
-        return PILFaceEngine()
 
+    if _global_engine is not None:
+        return _global_engine
+
+    try:
+        _global_engine = InsightFaceEngine()
+        return _global_engine
+    except Exception as err:
+        logger.warning("InsightFace não pôde ser carregado: %s. Utilizando MockEngine.", err)
+        _global_engine = MockFaceEngine()
+        return _global_engine

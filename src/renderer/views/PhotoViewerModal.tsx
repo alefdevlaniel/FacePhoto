@@ -22,7 +22,13 @@ export const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({
 }) => {
   if (!isOpen || !photo) return null;
 
-  const mediaUrl = `${API_BASE_URL}/api/media?path=${encodeURIComponent(photo.caminho_foto)}`;
+  const thumbUrl = `${API_BASE_URL}/api/media?path=${encodeURIComponent(photo.caminho_foto)}&thumb=true&size=480`;
+  const fullMediaUrl = `${API_BASE_URL}/api/media?path=${encodeURIComponent(photo.caminho_foto)}`;
+  const [fullLoaded, setFullLoaded] = React.useState<boolean>(false);
+
+  React.useEffect(() => {
+    setFullLoaded(false);
+  }, [photo?.id]);
 
   const getNomeArquivo = (caminho: string) => {
     const parts = caminho.split(/[/\\]/);
@@ -86,15 +92,35 @@ export const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({
       </div>
       <div className="viewer-body">
         <div className="viewer-main">
-          <div className="viewer-photo-mock" style={{ position: 'relative', overflow: 'hidden' }}>
+          <div className="viewer-photo-mock" style={{ position: 'relative', overflow: 'hidden', background: '#000' }}>
+            {/* Thumbnail rápido em background para renderização imediata */}
             <img
-              src={mediaUrl}
-              alt="Foto encontrada ampliada"
+              src={thumbUrl}
+              alt="Preview miniatura"
               style={{
+                position: 'absolute',
+                inset: 0,
                 width: '100%',
                 height: '100%',
                 objectFit: 'contain',
-                background: '#000',
+                filter: fullLoaded ? 'none' : 'blur(4px)',
+                transition: 'filter 0.3s ease',
+              }}
+            />
+            {/* Foto original carregada de forma progressiva */}
+            <img
+              src={fullMediaUrl}
+              alt="Foto encontrada em alta resolução"
+              onLoad={() => setFullLoaded(true)}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                opacity: fullLoaded ? 1 : 0,
+                transition: 'opacity 0.3s ease',
+                zIndex: 1,
               }}
               onError={(e) => {
                 (e.target as HTMLElement).style.display = 'none';

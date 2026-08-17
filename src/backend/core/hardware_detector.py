@@ -1,79 +1,106 @@
 """
-Módulo para detecção automática de hardware e aceleração gráfica (GPU vs CPU).
-Detecta suporte a NVIDIA CUDA, Apple MPS e fallback para CPU.
+Módulo para detecção automática de hardware e seleção do melhor motor de aceleração.
+Detecta dinamicamente suporte a NVIDIA CUDA, DirectML (NVIDIA/AMD/Intel GPU no Windows), Apple MPS/CoreML e CPU balanceada.
 """
 
 from dataclasses import dataclass
+import os
 import subprocess
 import sys
 
 
 @dataclass
 class HardwareInfo:
-    device_type: str  # "cuda", "mps", "cpu"
+    device_type: str  # "cuda", "directml", "mps", "cpu"
     name: str  # Nome amigável do dispositivo
     has_gpu: bool
+    optimal_providers: list[str]
+
+
+def get_optimal_onnx_providers() -> list[str]:
+    """
+    Retorna a lista priorizada de Execution Providers do ONNX Runtime para a máquina atual,
+    sempre com fallback garantido para CPU.
+    """
+    try:
+        import onnxruntime as ort
+        available = set(ort.get_available_providers())
+    except Exception:
+        return ["CPUExecutionProvider"]
+
+    # Ordem de prioridade de aceleração por hardware
+    priority_order = [
+        "CUDAExecutionProvider",
+        "DmlExecutionProvider",
+        "CoreMLExecutionProvider",
+        "OpenVINOExecutionProvider",
+        "CPUExecutionProvider",
+    ]
+
+    selected = [p for p in priority_order if p in available]
+    if "CPUExecutionProvider" not in selected:
+        selected.append("CPUExecutionProvider")
+
+    return selected
 
 
 def detect_hardware() -> HardwareInfo:
     """
-    Identifica o melhor hardware disponível no sistema para aceleração de IA.
+    Identifica dinamicamente o melhor hardware disponível no computador atual para aceleração de IA.
+    Suporta qualquer fabricante (NVIDIA, AMD, Intel, Apple) com fallback robusto para CPU.
     """
-    # 1. Tentar obter nome real da GPU NVIDIA via nvidia-smi
+    optimal_providers = get_optimal_onnx_providers()
+    has_gpu = any(p in optimal_providers for p in ["CUDAExecutionProvider", "DmlExecutionProvider", "CoreMLExecutionProvider"])
+
+    # 1. Verificar GPU NVIDIA via nvidia-smi
+    gpu_name = None
     try:
         res = subprocess.run(
             ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
             capture_output=True,
             text=True,
-            timeout=3,
+            timeout=2,
         )
         if res.returncode == 0 and res.stdout.strip():
             gpu_name = res.stdout.splitlines()[0].strip()
-            return HardwareInfo(
-                device_type="cuda",
-                name=f"{gpu_name} (NVIDIA CUDA)",
-                has_gpu=True,
-            )
     except Exception:
         pass
 
-    # 2. PyTorch CUDA / MPS
-    try:
-        import torch
+    # 2. Se houver CUDA ativo
+    if "CUDAExecutionProvider" in optimal_providers:
+        name = f"{gpu_name} (NVIDIA CUDA)" if gpu_name else "GPU NVIDIA CUDA"
+        return HardwareInfo(
+            device_type="cuda",
+            name=name,
+            has_gpu=True,
+            optimal_providers=optimal_providers,
+        )
 
-        if torch.cuda.is_available():
-            device_name = torch.cuda.get_device_name(0)
-            return HardwareInfo(
-                device_type="cuda",
-                name=f"{device_name} (NVIDIA CUDA)",
-                has_gpu=True,
-            )
-        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-            return HardwareInfo(
-                device_type="mps",
-                name="Apple Silicon GPU (Metal Performance Shaders)",
-                has_gpu=True,
-            )
-    except ImportError:
-        pass
+    # 3. Se houver DirectML ativo (NVIDIA, AMD Radeon ou Intel Arc / iGPU no Windows)
+    if "DmlExecutionProvider" in optimal_providers:
+        name = f"{gpu_name} (Aceleração DirectML / GPU)" if gpu_name else "Aceleração DirectML (GPU Dedicada/Integrada)"
+        return HardwareInfo(
+            device_type="directml",
+            name=name,
+            has_gpu=True,
+            optimal_providers=optimal_providers,
+        )
 
-    # 3. ONNX Runtime
-    try:
-        import onnxruntime as ort
+    # 4. Apple Silicon / CoreML
+    if "CoreMLExecutionProvider" in optimal_providers or sys.platform == "darwin":
+        return HardwareInfo(
+            device_type="mps",
+            name="Apple Silicon GPU (Neural Engine / CoreML)",
+            has_gpu=True,
+            optimal_providers=optimal_providers,
+        )
 
-        providers = ort.get_available_providers()
-        if "CUDAExecutionProvider" in providers:
-            return HardwareInfo(
-                device_type="cuda",
-                name="GPU NVIDIA CUDA",
-                has_gpu=True,
-            )
-    except ImportError:
-        pass
-
-    # Fallback para CPU
+    # 5. Fallback Universal para CPU
+    cpu_count = os.cpu_count() or 4
     return HardwareInfo(
         device_type="cpu",
-        name=f"CPU ({sys.platform.upper()})",
+        name=f"Processador CPU ({cpu_count} núcleos · {sys.platform.upper()})",
         has_gpu=False,
+        optimal_providers=["CPUExecutionProvider"],
     )
+

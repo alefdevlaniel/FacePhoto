@@ -38,8 +38,10 @@ class TestCoreEngine(unittest.TestCase):
     # --- Hardware Detector ---
     def test_hardware_detector(self):
         info = detect_hardware()
-        self.assertIn(info.device_type, ["cuda", "mps", "cpu"])
+        self.assertIn(info.device_type, ["cuda", "directml", "mps", "cpu"])
         self.assertTrue(isinstance(info.name, str))
+        self.assertTrue(isinstance(info.optimal_providers, list))
+        self.assertTrue(len(info.optimal_providers) >= 1)
 
     # --- File Scanner ---
     def test_file_scanner_supported_formats(self):
@@ -98,7 +100,7 @@ class TestCoreEngine(unittest.TestCase):
         self.assertEqual(len(unique), 1)
         self.assertEqual(len(dups), 1)
 
-    # --- Face Engine (Mock) ---
+    # --- Face Engine (Mock & Factory) ---
     def test_mock_face_engine(self):
         engine = MockFaceEngine()
         img_path = self.temp_path / "test_face.jpg"
@@ -106,8 +108,11 @@ class TestCoreEngine(unittest.TestCase):
 
         results = engine.detect_and_extract(img_path)
         self.assertEqual(len(results), 1)
-        self.assertEqual(len(results[0].embedding), 128)
-        self.assertEqual(results[0].bounding_box.to_dict(), {"x": 50, "y": 50, "w": 100, "h": 100})
+        self.assertEqual(len(results[0].embedding), 512)
+        self.assertEqual(results[0].bounding_box.x, 50)
+        self.assertEqual(results[0].bounding_box.y, 50)
+        self.assertEqual(results[0].bounding_box.w, 100)
+        self.assertEqual(results[0].bounding_box.h, 100)
 
         # Testar cálculo de similaridade de cosseno
         sim_same = engine.calculate_similarity(results[0].embedding, results[0].embedding)

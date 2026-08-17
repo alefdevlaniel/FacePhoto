@@ -176,31 +176,76 @@ export async function copiarResultados(
   return res.json();
 }
 
+export interface SSEController {
+  close: () => void;
+}
+
 export function conectarStreamSSE(
   sessaoId: string,
   onProgress: (data: any) => void,
   onCompleted: (data: any) => void,
   onError: (err: any) => void
-): EventSource {
-  const source = new EventSource(`${API_BASE_URL}/api/sessoes/${sessaoId}/stream`);
+): SSEController {
+  let isManuallyClosed = false;
+  let source: EventSource | null = null;
+  let reconnectTimer: any = null;
 
-  source.onmessage = (event) => {
+  const connect = () => {
+    if (isManuallyClosed) return;
+
     try {
-      const data = JSON.parse(event.data);
-      if (data.event === 'progress' || data.event === 'paused') {
-        onProgress(data);
-      } else if (data.event === 'completed' || data.event === 'cancelled') {
-        onCompleted(data);
-        source.close();
-      }
-    } catch (err) {
-      onError(err);
+      source = new EventSource(`${API_BASE_URL}/api/sessoes/${sessaoId}/stream`);
+
+      source.onmessage = (event) => {
+        try {
+          if (!event.data) return;
+          const data = JSON.parse(event.data);
+          if (data.event === 'progress' || data.event === 'paused') {
+            onProgress(data);
+          } else if (data.event === 'completed' || data.event === 'cancelled') {
+            onCompleted(data);
+            if (source) source.close();
+          }
+        } catch (parseErr) {
+          console.warn('Erro ao decodificar payload SSE:', parseErr);
+        }
+      };
+
+      source.onerror = (err) => {
+        console.warn('Conexão SSE interrompida (aguardando restabelecimento do sistema)...', err);
+        onError(err);
+
+        if (!isManuallyClosed) {
+          if (source) {
+            source.close();
+            source = null;
+          }
+          // Tentar reconectar suavemente após 2 segundos se a máquina tiver acabado de acordar
+          clearTimeout(reconnectTimer);
+          reconnectTimer = setTimeout(() => {
+            if (!isManuallyClosed) {
+              connect();
+            }
+          }, 2000);
+        }
+      };
+    } catch (initErr) {
+      console.warn('Falha ao abrir EventSource:', initErr);
+      onError(initErr);
     }
   };
 
-  source.onerror = (err) => {
-    onError(err);
-  };
+  connect();
 
-  return source;
+  return {
+    close: () => {
+      isManuallyClosed = true;
+      clearTimeout(reconnectTimer);
+      if (source) {
+        source.close();
+        source = null;
+      }
+    },
+  };
 }
+

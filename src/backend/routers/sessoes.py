@@ -14,13 +14,21 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 import numpy as np
+# pyrefly: ignore [missing-import]
 from src.backend.core.duplicate_detector import calculate_perceptual_hash, filter_unique_images
+# pyrefly: ignore [missing-import]
 from src.backend.core.face_engine import create_face_engine
+# pyrefly: ignore [missing-import]
 from src.backend.core.file_copy_manager import copy_multiple_files
+# pyrefly: ignore [missing-import]
 from src.backend.core.file_scanner import count_supported_images, scan_directory_batches
+# pyrefly: ignore [missing-import]
 from src.backend.core.hardware_detector import detect_hardware
+# pyrefly: ignore [missing-import]
 from src.backend.core.result_ranker import MatchStatus, classify_match
+# pyrefly: ignore [missing-import]
 from src.backend.database.connection import get_db_connection
+# pyrefly: ignore [missing-import]
 from src.backend.models.sessao import SessaoCreate, SessaoResponse
 
 router = APIRouter(prefix="/api/sessoes", tags=["Sessões"])
@@ -219,6 +227,8 @@ async def stream_processamento(sessao_id: str, request: Request):
 
         processed_count = found_count + review_count
         duplicate_count = sessao_row["total_duplicatas"] or 0
+        recent_found: list[dict] = []
+        last_found_data = None
 
         # Leitura lazy (gerador) em vez de carregar a lista inteira na RAM com list()
         batches_generator = scan_directory_batches(origem, batch_size=20) if origem.exists() else []
@@ -254,6 +264,8 @@ async def stream_processamento(sessao_id: str, request: Request):
                 # Extração facial executada em threadpool para manter o event loop responsivo
                 detections = await asyncio.to_thread(engine.detect_and_extract, file_path)
 
+                found_in_this_file = False
+
                 for det in detections:
                     best_score = 0.0
                     target_p_id = pessoa_ids[0] if pessoa_ids else "desconhecido"
@@ -270,6 +282,7 @@ async def stream_processamento(sessao_id: str, request: Request):
                     status_match = classify_match(best_score, threshold)
 
                     if status_match != MatchStatus.DESCARTADO:
+                        found_in_this_file = True
                         res_id = str(uuid.uuid4())
                         now_iso = datetime.now().isoformat()
                         phash = await asyncio.to_thread(calculate_perceptual_hash, file_path)
@@ -279,7 +292,21 @@ async def stream_processamento(sessao_id: str, request: Request):
                         else:
                             review_count += 1
 
+                        bbox_dict = det.bounding_box.to_dict()
                         caminhos_ja_salvos.add(str(file_path))
+
+                        last_found_data = {
+                            "id": res_id,
+                            "caminho_foto": str(file_path),
+                            "nome": file_path.name,
+                            "score": round(float(best_score), 4),
+                            "status": status_match.value,
+                            "bounding_box": bbox_dict,
+                        }
+                        recent_found.insert(0, last_found_data)
+                        if len(recent_found) > 12:
+                            recent_found.pop()
+
                         with get_db_connection() as conn:
                             conn.execute(
                                 """
@@ -295,7 +322,7 @@ async def stream_processamento(sessao_id: str, request: Request):
                                     str(file_path),
                                     best_score,
                                     status_match.value,
-                                    json.dumps(det.bounding_box.to_dict()),
+                                    json.dumps(bbox_dict),
                                     phash,
                                     now_iso,
                                 ),
@@ -312,7 +339,9 @@ async def stream_processamento(sessao_id: str, request: Request):
                     "review_count": review_count,
                     "duplicate_count": duplicate_count,
                     "current_file": file_path.name,
-                    "log": f"Analisando {file_path.name} — {found_count} encontradas",
+                    "last_found": last_found_data,
+                    "recent_found": recent_found,
+                    "log": f"{'✓ Foto encontrada: ' if found_in_this_file else 'Analisando '}{file_path.name} — {found_count} identificadas",
                 }
                 yield f"data: {json.dumps(payload)}\n\n"
                 # Pausa cooperativa para ceder CPU para o SO Windows

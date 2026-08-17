@@ -11,28 +11,56 @@ import { SessaoDTO } from './services/api';
 export type ScreenId = 'welcome' | 'home' | 'config' | 'processing' | 'results' | 'report';
 
 export const AppContent: React.FC = () => {
-  const [currentScreen, setCurrentScreen] = useState<ScreenId>('welcome');
-  const [activeSessaoId, setActiveSessaoId] = useState<string | null>(null);
+  const [currentScreen, setCurrentScreen] = useState<ScreenId>(() => {
+    try {
+      const saved = localStorage.getItem('facephoto_current_screen') as ScreenId;
+      if (saved && ['welcome', 'home', 'config', 'processing', 'results', 'report'].includes(saved)) {
+        return saved;
+      }
+    } catch {}
+    return 'welcome';
+  });
+
+  const [activeSessaoId, setActiveSessaoId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('facephoto_active_sessao_id') || null;
+    } catch {
+      return null;
+    }
+  });
+
   const [copiedCount, setCopiedCount] = useState<number>(0);
   const [targetFolderPath, setTargetFolderPath] = useState<string>('');
 
   const goTo = (screen: ScreenId) => {
     setCurrentScreen(screen);
+    try {
+      localStorage.setItem('facephoto_current_screen', screen);
+    } catch {}
   };
 
   const handleStartSession = (sessao: SessaoDTO) => {
     setActiveSessaoId(sessao.id);
     setTargetFolderPath(sessao.pasta_destino);
+    try {
+      localStorage.setItem('facephoto_active_sessao_id', sessao.id);
+    } catch {}
     goTo('processing');
   };
 
   const handleResumeSession = (sessaoId: string) => {
     setActiveSessaoId(sessaoId);
+    try {
+      localStorage.setItem('facephoto_active_sessao_id', sessaoId);
+    } catch {}
     goTo('processing');
   };
 
   const handleViewResults = (sessaoId: string) => {
     setActiveSessaoId(sessaoId);
+    try {
+      localStorage.setItem('facephoto_active_sessao_id', sessaoId);
+    } catch {}
     goTo('results');
   };
 
@@ -41,6 +69,7 @@ export const AppContent: React.FC = () => {
     setTargetFolderPath(destination);
     goTo('report');
   };
+
 
   return (
     <div id="app-root">

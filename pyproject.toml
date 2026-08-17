@@ -1,7 +1,7 @@
 [project]
 name = "facephoto"
-version = "1.0.0"
-description = "Reconhecimento Facial em Fotos — 100% Offline & Privado"
+version = "1.1.0"
+description = "Reconhecimento Facial em Fotos — 100% Offline & Privado (InsightFace Engine)"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [
@@ -14,9 +14,9 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",
     "pydantic>=2.7.0",
 
-    # Motor de Reconhecimento Facial & IA
-    "deepface>=0.0.93",
-    "onnxruntime>=1.18.0",
+    # Motor de Reconhecimento Facial & IA de Alta Precisão (InsightFace + ONNX Runtime DirectML GPU)
+    "insightface>=1.0.0",
+    "onnxruntime-directml>=1.18.0",
 
     # Processamento de Imagem & Formatos
     "opencv-python-headless>=4.9.0",

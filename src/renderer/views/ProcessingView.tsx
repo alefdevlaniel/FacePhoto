@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Topbar } from '../components/Topbar';
 import {
+  API_BASE_URL,
   cancelarSessao,
   conectarStreamSSE,
   pausarSessao,
@@ -12,6 +13,15 @@ interface ProcessingViewProps {
   onComplete: () => void;
   onCancel: () => void;
   onNavigateHome: () => void;
+}
+
+interface FoundPhotoItem {
+  id?: string;
+  caminho_foto: string;
+  nome: string;
+  score: number;
+  status: string;
+  bounding_box?: any;
 }
 
 export const ProcessingView: React.FC<ProcessingViewProps> = ({
@@ -29,6 +39,10 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
   const [reviewCount, setReviewCount] = useState<number>(0);
   const [duplicateCount, setDuplicateCount] = useState<number>(0);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
+  const [lastFound, setLastFound] = useState<FoundPhotoItem | null>(null);
+  const [recentFound, setRecentFound] = useState<FoundPhotoItem[]>([]);
+  const [selectedPreview, setSelectedPreview] = useState<FoundPhotoItem | null>(null);
+
   const [logs, setLogs] = useState<Array<{ time: string; text: string; type: string }>>([
     {
       time: new Date().toLocaleTimeString(),
@@ -50,6 +64,14 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
         if (data.review_count !== undefined) setReviewCount(data.review_count);
         if (data.duplicate_count !== undefined) setDuplicateCount(data.duplicate_count);
         if (data.current_file) setCurrentFile(data.current_file);
+
+        if (data.last_found) {
+          setLastFound(data.last_found);
+          setSelectedPreview(data.last_found);
+        }
+        if (data.recent_found && Array.isArray(data.recent_found)) {
+          setRecentFound(data.recent_found);
+        }
 
         if (data.log) {
           setLogs((prev) => [
@@ -116,6 +138,55 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
       await cancelarSessao(sessaoId);
     }
     onCancel();
+  };
+
+  const activePhoto = selectedPreview || lastFound;
+
+  const renderBoundingBox = (bbox: any) => {
+    if (!bbox || typeof bbox !== 'object') return null;
+    let top = '';
+    let left = '';
+    let width = '';
+    let height = '';
+
+    if (bbox.x_pct !== undefined && bbox.y_pct !== undefined && bbox.w_pct && bbox.h_pct) {
+      left = `${bbox.x_pct * 100}%`;
+      top = `${bbox.y_pct * 100}%`;
+      width = `${bbox.w_pct * 100}%`;
+      height = `${bbox.h_pct * 100}%`;
+    } else {
+      const x = Number(bbox.x);
+      const y = Number(bbox.y);
+      const w = Number(bbox.w);
+      const h = Number(bbox.h);
+      if (isNaN(x) || isNaN(y) || isNaN(w) || isNaN(h)) return null;
+
+      if (x <= 1 && y <= 1 && w <= 1 && h <= 1) {
+        left = `${x * 100}%`;
+        top = `${y * 100}%`;
+        width = `${w * 100}%`;
+        height = `${h * 100}%`;
+      } else {
+        return null;
+      }
+    }
+
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          top,
+          left,
+          width,
+          height,
+          border: '2px solid var(--accent)',
+          borderRadius: '6px',
+          boxShadow: '0 0 16px var(--accent-glow)',
+          zIndex: 2,
+          pointerEvents: 'none',
+        }}
+      />
+    );
   };
 
   return (
@@ -188,8 +259,99 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
             </div>
             <div className="time-item">
               <div className="t-label">Transmissão</div>
-              <div className="t-value" style={{ fontSize: 12 }}>SSE Local</div>
+              <div className="t-value" style={{ fontSize: 12 }}>SSE Live</div>
             </div>
+          </div>
+
+          {/* ── Live Preview das Fotos Encontradas ── */}
+          <div className="live-preview-section">
+            <div className="live-preview-header">
+              <div className="section-label" style={{ margin: 0 }}>
+                Visualização em Tempo Real ({foundCount + reviewCount} descobertas)
+              </div>
+              <div className="live-badge">
+                <div className="live-pulse-dot"></div>
+                {activePhoto ? 'Match Detectado' : 'Varrendo Acervo'}
+              </div>
+            </div>
+
+            <div className="live-featured-card">
+              {activePhoto ? (
+                <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ position: 'relative', height: '100%', maxWidth: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <img
+                      key={activePhoto.caminho_foto}
+                      src={`${API_BASE_URL}/api/media?path=${encodeURIComponent(activePhoto.caminho_foto)}&thumb=true&size=480`}
+                      alt="Preview foto encontrada ao vivo"
+                      style={{ maxHeight: '210px', maxWidth: '100%', objectFit: 'contain', display: 'block' }}
+                    />
+                    {renderBoundingBox(activePhoto.bounding_box)}
+                  </div>
+                  <div className="live-featured-overlay">
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>
+                        {activePhoto.nome}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                        {activePhoto.status === 'confirmado' ? '✓ Match Confirmado' : '⚠ Revisão Manual'}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        background: 'var(--accent)',
+                        color: '#fff',
+                        padding: '4px 10px',
+                        borderRadius: 6,
+                        fontWeight: 800,
+                        fontSize: 13,
+                        fontFamily: 'JetBrains Mono, monospace',
+                      }}
+                    >
+                      {Math.round(activePhoto.score * 100)}%
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>
+                  <div style={{ fontSize: 32, marginBottom: 8, opacity: 0.6 }}>🔍</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>Rastreando rostos no acervo...</div>
+                  <div style={{ fontSize: 11, marginTop: 4 }}>
+                    As fotos identificadas aparecerão aqui automaticamente.
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Carrossel de Miniaturas Recentes */}
+            {recentFound.length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+                  Últimas fotos encontradas (clique para focar):
+                </div>
+                <div className="live-carousel-scroll">
+                  {recentFound.map((item, idx) => {
+                    const isSelected = activePhoto?.caminho_foto === item.caminho_foto;
+                    return (
+                      <div
+                        key={idx}
+                        className={`live-carousel-thumb ${isSelected ? 'active' : ''}`}
+                        onClick={() => setSelectedPreview(item)}
+                        title={`Foto: ${item.nome} (${Math.round(item.score * 100)}%)`}
+                      >
+                        <img
+                          src={`${API_BASE_URL}/api/media?path=${encodeURIComponent(item.caminho_foto)}&thumb=true&size=160`}
+                          alt={item.nome}
+                          loading="lazy"
+                        />
+                        <div className="live-carousel-badge">
+                          {Math.round(item.score * 100)}%
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           <div>
@@ -230,3 +392,4 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({
     </div>
   );
 };
+
